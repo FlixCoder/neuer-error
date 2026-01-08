@@ -3,21 +3,29 @@
 //! - Contextual information for humans to receive helpful error messages.
 //! - Comfortable, low-boilerplate API, that encourages (or enforces) additional context for errors
 //!   along the way.
+#![cfg_attr(not(feature = "std"), no_std)]
+#![warn(clippy::std_instead_of_core, clippy::std_instead_of_alloc, clippy::alloc_instead_of_core)]
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
 
 mod error;
+mod features;
 mod macros;
 mod results;
 
 pub use self::{
-	error::{ErrorStatus, HeapError},
-	results::{ConvertResult, ResultExt},
+	error::{CtxError, CtxErrorImpl},
+	results::{ConvertResult, CtxResultExt, ResultExt},
 };
 
-/// Result type alias using the crate's `HeapError` type.
-///
-/// It often makes sense to make your own `Error` and `Result` aliases for your specific error
-/// kind.
-pub type Result<T, K = ()> = ::core::result::Result<T, HeapError<K>>;
+/// `Result` type alias using the crate's [`CtxError`] type.
+pub type Result<T, E = CtxError> = ::core::result::Result<T, E>;
+
+pub mod prelude {
+	//! All traits that need to be in scope for	comfortable usage.
+	pub use crate::{ConvertResult as _, CtxResultExt as _, ResultExt as _};
+}
 
 #[cfg(test)]
 mod tests;

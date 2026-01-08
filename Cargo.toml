@@ -8,6 +8,13 @@ homepage = "https://github.com/FlixCoder/contextual-errors"
 repository = "https://github.com/FlixCoder/contextual-errors"
 readme = "README.md"
 
+[features]
+default = ["std", "send", "sync"]
+std = ["alloc"] # Use the standard library.
+alloc = [] # Use the `alloc` crate.
+send = [] # Error type must be `Send`.
+sync = ["send"] # Error type must be `Sync`.
+
 [dependencies]
 
 [dev-dependencies]

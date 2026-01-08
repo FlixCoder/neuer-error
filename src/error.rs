@@ -1,200 +1,252 @@
 //! Error type implementation.
 
 use ::core::{
+	any::Any,
 	error::Error,
 	fmt::{Debug, Display, Formatter, Result as FmtResult},
-};
-use ::std::{
-	backtrace::{Backtrace, BacktraceStatus},
+	ops::{Deref, DerefMut},
 	panic::Location,
 };
 
-/// Meaning of the error in terms of error handling.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
-pub enum ErrorStatus {
-	/// Error is permanent and must not be retried.
-	#[default]
-	Permanent,
-	/// Error is temporary and may be retried.
-	Temporary,
-	/// Error is temporary, but was already retried without success.
-	Persistent,
-}
+use crate::features::{AnyDebugSendSync, Container, ErrorSendSync, Stack};
 
-impl Display for ErrorStatus {
-	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-		let s = match self {
-			Self::Permanent => "permanent",
-			Self::Temporary => "temporary",
-			Self::Persistent => "persistent",
-		};
-		f.write_str(s)
-	}
-}
-
+/// Error information for humans.
 /// Error message with location information.
 #[derive(Debug)]
-struct ErrorMessage {
+struct HumanInfo {
 	/// Message text.
 	message: String,
 	/// Location of occurrence.
 	location: &'static Location<'static>,
 }
 
+/// Error information for machines.
+/// Arbitrary, project specific types of information.
+#[derive(Debug)]
+struct MachineInfo {
+	/// Attachment.
+	attachment: Container<dyn AnyDebugSendSync>,
+}
+
 /// Generic rich error type for use within `Result`s, for libraries and applications.
 ///
 /// When using the `Display` implementation, you can use `{:#}` to get a compact single-line version
 /// instead of multi-line formatted.
-///
-/// It often makes sense to make your own `Error` and `Result` aliases for your specific error kind.
-#[derive(Debug)]
-pub struct HeapError<K> {
-	/// Kind of error, if given.
-	kind: Option<K>,
-	/// Error status.
-	status: ErrorStatus,
+#[derive(Debug, Default)]
+pub struct CtxError {
 	/// Contextual information for humans.
-	context: Vec<ErrorMessage>,
-	/// Source error this was constructed from.
-	source: Option<Box<dyn Error>>,
-	/// Optional backtrace at main creation, only captured without error kind.
-	backtrace: Option<Box<Backtrace>>,
+	human: Stack<HumanInfo>,
+	/// Contextual information for machines.
+	machine: Stack<MachineInfo>,
+	/// Source error.
+	source: Option<Container<dyn ErrorSendSync>>,
 }
 
-impl<K: Display> Display for HeapError<K> {
+impl Display for CtxError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-		write!(f, "[{}]: ", self.status)?;
-		if let Some(kind) = self.kind.as_ref() {
-			kind.fmt(f)?;
-		} else {
-			f.write_str("Unknown error")?;
+		if self.human.is_empty() {
+			write!(f, "Unknown error")?;
 		}
 
-		for context in self.context.iter().rev() {
+		let mut context_iter = self.human.iter().rev().peekable();
+		while let Some(context) = context_iter.next() {
 			if f.alternate() {
-				write!(f, "; {} at {}", context.message, context.location)?;
+				write!(f, "{} (at {})", context.message, context.location)?;
+				if context_iter.peek().is_some() {
+					write!(f, "; ")?;
+				}
 			} else {
-				writeln!(f)?;
-				writeln!(f)?;
-				writeln!(f, "|- {}", context.message)?;
+				writeln!(f, "{}", context.message)?;
 				write!(f, "|- at {}", context.location)?;
+				if context_iter.peek().is_some() {
+					writeln!(f)?;
+					writeln!(f, "|")?;
+				}
 			}
 		}
 
-		let mut source = self.source.as_deref();
+		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
+		let mut source = self.source.as_deref().map(|e| e as &(dyn Error + 'static));
 		while let Some(err) = source {
 			if f.alternate() {
 				write!(f, "; caused by {err}")?;
 			} else {
 				writeln!(f)?;
-				writeln!(f)?;
+				writeln!(f, "|")?;
 				writeln!(f, "|- caused by {err}")?;
 			}
 
 			source = err.source();
 		}
 
-		if !f.alternate()
-			&& let Some(backtrace) = self.backtrace.as_deref()
-		{
-			writeln!(f)?;
-			writeln!(f)?;
-			writeln!(f, "|- Backtrace:")?;
-			write!(f, "{backtrace}")?;
-		}
-
 		Ok(())
 	}
 }
 
-impl<K: Debug + Display> Error for HeapError<K> {
-	fn source(&self) -> Option<&(dyn Error + 'static)> {
-		self.source.as_deref()
-	}
-}
-
-impl<K> Default for HeapError<K> {
-	fn default() -> Self {
-		let backtrace = Backtrace::capture();
-		Self {
-			kind: None,
-			status: ErrorStatus::default(),
-			context: vec![],
-			source: None,
-			backtrace: (backtrace.status() == BacktraceStatus::Captured)
-				.then(move || Box::new(backtrace)),
-		}
-	}
-}
-
-impl<K> HeapError<K> {
+#[expect(clippy::vec_init_then_push, reason = "Will be different type without heap allocation")]
+impl CtxError {
 	/// Create new error.
+	#[track_caller]
 	#[must_use]
-	pub fn new(kind: K) -> Self {
-		Self {
-			kind: Some(kind),
-			status: ErrorStatus::default(),
-			context: vec![],
-			source: None,
-			backtrace: None,
-		}
+	pub fn new<T: ToString>(message: T) -> Self {
+		let mut human = Stack::new();
+		human.push(HumanInfo { message: message.to_string(), location: Location::caller() });
+		Self { human, ..Default::default() }
 	}
 
 	/// Create new error from source error.
+	#[track_caller]
 	#[must_use]
-	pub fn new_with_source(kind: K, source: Box<dyn Error>) -> Self {
-		Self {
-			kind: Some(kind),
-			status: ErrorStatus::default(),
-			context: vec![],
-			source: Some(source),
-			backtrace: None,
-		}
+	pub fn new_with_source<T, E>(message: T, source: E) -> Self
+	where
+		T: ToString,
+		E: ErrorSendSync + 'static,
+	{
+		let mut human = Stack::new();
+		human.push(HumanInfo { message: message.to_string(), location: Location::caller() });
+		Self { human, source: Some(Container::new(source)), ..Default::default() }
 	}
 
 	/// Convert source error.
 	#[must_use]
-	pub fn from_source(source: Box<dyn Error>) -> Self {
-		let backtrace = Backtrace::capture();
-		Self {
-			kind: None,
-			status: ErrorStatus::default(),
-			context: vec![],
-			source: Some(source),
-			backtrace: (backtrace.status() == BacktraceStatus::Captured)
-				.then(move || Box::new(backtrace)),
-		}
+	pub fn from_source<E>(source: E) -> Self
+	where
+		E: ErrorSendSync + 'static,
+	{
+		Self { source: Some(Container::new(source)), ..Default::default() }
 	}
 
-	/// Get the error kind.
-	pub const fn kind(&self) -> Option<&K> {
-		self.kind.as_ref()
-	}
-
-	/// Get the error status.
-	pub const fn status(&self) -> ErrorStatus {
-		self.status
-	}
-
-	/// Get the backtrace.
-	pub fn backtrace(&self) -> Option<&Backtrace> {
-		self.backtrace.as_deref()
-	}
-
-	/// Set the error status.
-	pub const fn set_status(&mut self, status: ErrorStatus) {
-		self.status = status;
-	}
-
-	/// Add context to the error.
+	/// Add human context to the error.
 	#[track_caller]
 	#[must_use]
 	pub fn context<C>(mut self, context: C) -> Self
 	where
 		C: ToString,
 	{
-		let context = ErrorMessage { message: context.to_string(), location: Location::caller() };
-		self.context.push(context);
+		let context = HumanInfo { message: context.to_string(), location: Location::caller() };
+		self.human.push(context);
 		self
+	}
+
+	/// Add machine context to the error.
+	///
+	/// This will not override existing attachments. If you want to replace and override any
+	/// existing attachments of the same type, use `attach_override` instead.
+	#[must_use]
+	pub fn attach<C>(mut self, context: C) -> Self
+	where
+		C: AnyDebugSendSync + 'static,
+	{
+		let context = MachineInfo { attachment: Container::new(context) };
+		self.machine.push(context);
+		self
+	}
+
+	/// Set machine context in the error.
+	///
+	/// This will override existing attachments of the same type. If you want to add attachments of
+	/// the same type, use `attach` instead.
+	#[must_use]
+	pub fn attach_override<C>(mut self, context: C) -> Self
+	where
+		C: AnyDebugSendSync + 'static,
+	{
+		let context = MachineInfo { attachment: Container::new(context) };
+		self.machine.retain(|ctx| {
+			#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
+			let any = &ctx.attachment as &(dyn Any + 'static);
+			!any.is::<C>()
+		});
+		self.machine.push(context);
+		self
+	}
+
+	/// Get the machine context attachment of the given type.
+	#[must_use]
+	#[inline]
+	pub fn attachment<C>(&self) -> Option<&C>
+	where
+		C: AnyDebugSendSync + 'static,
+	{
+		self.attachments().next()
+	}
+
+	/// Get all machine context attachments (iterator) of the given type.
+	pub fn attachments<C>(&self) -> impl Iterator<Item = &'_ C>
+	where
+		C: AnyDebugSendSync + 'static,
+	{
+		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
+		self.machine
+			.iter()
+			.map(|ctx| ctx.attachment.as_ref() as &(dyn Any + 'static))
+			.filter_map(|ctx| ctx.downcast_ref())
+	}
+
+	/// Wrap this error into a [`CtxErrorImpl`] that implements [`Error`].
+	#[must_use]
+	#[inline]
+	pub const fn into_error(self) -> CtxErrorImpl {
+		CtxErrorImpl(self)
+	}
+}
+
+impl<E> From<E> for CtxError
+where
+	E: ErrorSendSync + 'static,
+{
+	#[inline]
+	fn from(err: E) -> Self {
+		CtxError::from_source(err)
+	}
+}
+
+/// Wrapper for [`CtxError`] that implements [`Error`].
+#[derive(Debug, Default)]
+pub struct CtxErrorImpl(pub CtxError);
+
+impl From<CtxError> for CtxErrorImpl {
+	#[inline]
+	fn from(err: CtxError) -> Self {
+		Self(err)
+	}
+}
+
+impl Deref for CtxErrorImpl {
+	type Target = CtxError;
+
+	#[inline]
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl DerefMut for CtxErrorImpl {
+	#[inline]
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+impl Display for CtxErrorImpl {
+	#[inline]
+	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+		Display::fmt(&self.0, f)
+	}
+}
+
+impl Error for CtxErrorImpl {
+	fn source(&self) -> Option<&(dyn Error + 'static)> {
+		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
+		self.0.source.as_deref().map(|e| e as &(dyn Error + 'static))
+	}
+}
+
+impl CtxErrorImpl {
+	/// Unwrap into the inner [`CtxError`].
+	#[must_use]
+	#[inline]
+	pub fn into_inner(self) -> CtxError {
+		self.0
 	}
 }
