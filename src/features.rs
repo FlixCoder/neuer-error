@@ -37,10 +37,14 @@ pub trait ErrorSendSync: Error + SendSync {}
 impl<T: Error + SendSync> ErrorSendSync for T {}
 
 
-/// Container type for dyn traits.
+/// Box type.
 #[cfg(feature = "alloc")]
-pub type Container<T> = alloc::boxed::Box<T>;
+pub type Box<T> = alloc::boxed::Box<T>;
 
-/// Stack type.
+/// Vec type for stacks.
 #[cfg(feature = "alloc")]
-pub type Stack<T> = alloc::vec::Vec<T>;
+pub type Vec<T> = alloc::vec::Vec<T>;
+
+/// String type.
+#[cfg(feature = "alloc")]
+pub type String = alloc::string::String;

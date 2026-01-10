@@ -8,7 +8,7 @@ use ::core::{
 	panic::Location,
 };
 
-use crate::features::{AnyDebugSendSync, Container, ErrorSendSync, Stack};
+use crate::features::{AnyDebugSendSync, Box, ErrorSendSync, String, Vec};
 
 /// Error information for humans.
 /// Error message with location information.
@@ -23,10 +23,24 @@ pub(crate) struct HumanInfo {
 /// Error information for machines.
 /// Arbitrary, project specific types of information.
 #[derive(Debug)]
-struct MachineInfo {
+pub(crate) struct MachineInfo {
 	/// Attachment.
-	attachment: Container<dyn AnyDebugSendSync>,
+	pub(crate) attachment: Box<dyn AnyDebugSendSync>,
 }
+
+/// Context information, either machine or human.
+/// Joined in a union type to save the space of another `Vec` in the error type.
+#[derive(Debug)]
+pub(crate) enum Info {
+	/// Contextual information for humans.
+	Human(HumanInfo),
+	/// Contextual information for machines.
+	Machine(MachineInfo),
+}
+// Ensure size of Context is as expected. Can be adjusted though.
+const _: () = {
+	assert!(size_of::<Info>() == 32);
+};
 
 /// Generic rich error type for use within `Result`s, for libraries and applications.
 ///
@@ -41,20 +55,17 @@ struct MachineInfo {
 /// version. instead of multi-line formatted.
 #[derive(Default)]
 pub struct CtxError {
-	/// Contextual information for humans.
-	human: Stack<HumanInfo>,
-	/// Contextual information for machines.
-	machine: Stack<MachineInfo>,
+	/// Contextual error information.
+	infos: Vec<Info>,
 	/// Source error.
-	source: Option<Container<dyn ErrorSendSync>>,
+	source: Option<Box<dyn ErrorSendSync>>,
 }
 
 impl Debug for CtxError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
 		if f.alternate() {
 			f.debug_struct("CtxError")
-				.field("human", &self.human)
-				.field("machine", &self.machine)
+				.field("infos", &self.infos)
 				.field("source", &self.source)
 				.finish()
 		} else {
@@ -65,21 +76,20 @@ impl Debug for CtxError {
 
 impl Display for CtxError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-		if self.human.is_empty() {
+		let mut human = self.contexts().peekable();
+		if human.peek().is_none() {
 			write!(f, "Unknown error")?;
 		}
-
-		let mut context_iter = self.human.iter().rev().peekable();
-		while let Some(context) = context_iter.next() {
+		while let Some(context) = human.next() {
 			if f.alternate() {
 				write!(f, "{} (at {})", context.message, context.location)?;
-				if context_iter.peek().is_some() {
+				if human.peek().is_some() {
 					write!(f, "; ")?;
 				}
 			} else {
 				writeln!(f, "{}", context.message)?;
 				write!(f, "|- at {}", context.location)?;
-				if context_iter.peek().is_some() {
+				if human.peek().is_some() {
 					writeln!(f)?;
 					writeln!(f, "|")?;
 				}
@@ -104,16 +114,17 @@ impl Display for CtxError {
 	}
 }
 
-#[expect(clippy::vec_init_then_push, reason = "Will be different type without heap allocation")]
 impl CtxError {
 	/// Create new error.
 	#[track_caller]
 	#[must_use]
 	#[inline]
 	pub fn new<T: ToString>(message: T) -> Self {
-		let mut human = Stack::new();
-		human.push(HumanInfo { message: message.to_string(), location: Location::caller() });
-		Self { human, ..Default::default() }
+		let infos = vec![Info::Human(HumanInfo {
+			message: message.to_string(),
+			location: Location::caller(),
+		})];
+		Self { infos, ..Default::default() }
 	}
 
 	/// Create new error from source error.
@@ -125,9 +136,11 @@ impl CtxError {
 		T: ToString,
 		E: ErrorSendSync + 'static,
 	{
-		let mut human = Stack::new();
-		human.push(HumanInfo { message: message.to_string(), location: Location::caller() });
-		Self { human, source: Some(Container::new(source)), ..Default::default() }
+		let infos = vec![Info::Human(HumanInfo {
+			message: message.to_string(),
+			location: Location::caller(),
+		})];
+		Self { infos, source: Some(Box::new(source)) }
 	}
 
 	/// Convert source error.
@@ -137,7 +150,7 @@ impl CtxError {
 	where
 		E: ErrorSendSync + 'static,
 	{
-		Self { source: Some(Container::new(source)), ..Default::default() }
+		Self { source: Some(Box::new(source)), ..Default::default() }
 	}
 
 	/// Add human context to the error.
@@ -149,23 +162,7 @@ impl CtxError {
 		C: ToString,
 	{
 		let context = HumanInfo { message: context.to_string(), location: Location::caller() };
-		self.human.push(context);
-		self
-	}
-
-	/// Add human context to the error, where the location was tracked outside already.
-	/// This is needed, since `#[track_caller]` cannot be applied to closures yet.
-	#[must_use]
-	pub(crate) fn context_provided_location<C>(
-		mut self,
-		context: C,
-		location: &'static Location<'static>,
-	) -> Self
-	where
-		C: ToString,
-	{
-		let context = HumanInfo { message: context.to_string(), location };
-		self.human.push(context);
+		self.infos.push(Info::Human(context));
 		self
 	}
 
@@ -179,8 +176,8 @@ impl CtxError {
 	where
 		C: AnyDebugSendSync + 'static,
 	{
-		let context = MachineInfo { attachment: Container::new(context) };
-		self.machine.push(context);
+		let context = MachineInfo { attachment: Box::new(context) };
+		self.infos.push(Info::Machine(context));
 		self
 	}
 
@@ -193,20 +190,48 @@ impl CtxError {
 	where
 		C: AnyDebugSendSync + 'static,
 	{
-		let context = MachineInfo { attachment: Container::new(context) };
-		self.machine.retain(|ctx| {
-			#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
-			let any = (ctx.attachment.as_ref()) as &(dyn Any + 'static);
-			!any.is::<C>()
+		let context = MachineInfo { attachment: Box::new(context) };
+		self.infos.retain(|info| match info {
+			Info::Human(_) => true,
+			Info::Machine(ctx) => {
+				#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
+				let any = (ctx.attachment.as_ref()) as &(dyn Any + 'static);
+				!any.is::<C>()
+			}
 		});
-		self.machine.push(context);
+		self.infos.push(Info::Machine(context));
 		self
 	}
 
-	/// Get an iterator over the human context.
-	#[cfg(test)] // Only used for tests.
+	/// Get an iterator over all context infos.
+	#[inline]
+	pub(crate) fn infos(&self) -> impl Iterator<Item = &'_ Info> {
+		self.infos.iter().rev()
+	}
+
+	/// Get an iterator over the human context infos.
+	#[inline]
 	pub(crate) fn contexts(&self) -> impl Iterator<Item = &'_ HumanInfo> {
-		self.human.iter().rev()
+		self.infos().filter_map(|info| match info {
+			Info::Human(info) => Some(info),
+			_ => None,
+		})
+	}
+
+	/// Get an iterator over the machine context attachments of the given type.
+	#[inline]
+	pub fn attachments<C>(&self) -> impl Iterator<Item = &'_ C>
+	where
+		C: AnyDebugSendSync + 'static,
+	{
+		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
+		self.infos()
+			.filter_map(|info| match info {
+				Info::Machine(info) => Some(info),
+				_ => None,
+			}) // Catch the newest attachment first.
+			.map(|ctx| ctx.attachment.as_ref() as &(dyn Any + 'static))
+			.filter_map(|ctx| ctx.downcast_ref())
 	}
 
 	/// Get the machine context attachment of the given type.
@@ -217,19 +242,6 @@ impl CtxError {
 		C: AnyDebugSendSync + 'static,
 	{
 		self.attachments().next()
-	}
-
-	/// Get all machine context attachments (iterator) of the given type.
-	pub fn attachments<C>(&self) -> impl Iterator<Item = &'_ C>
-	where
-		C: AnyDebugSendSync + 'static,
-	{
-		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
-		self.machine
-			.iter()
-			.rev() // Catch the newest attachment first.
-			.map(|ctx| ctx.attachment.as_ref() as &(dyn Any + 'static))
-			.filter_map(|ctx| ctx.downcast_ref())
 	}
 
 	/// Get the source error.

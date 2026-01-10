@@ -37,7 +37,7 @@ fn source() -> Result<bool, core::str::ParseBoolError> {
 
 fn source_source() -> Result<(), SourceError> {
 	source()?;
-	Ok(())
+	Result::Ok(())
 }
 
 fn level0() -> Result<()> {
@@ -68,33 +68,38 @@ fn debug_impl() {
 		alternate,
 		r#"
 CtxError {
-    human: [
-        HumanInfo {
-            message: "Level 0 error",
-            location: Location {
-                file: "src/tests.rs",
-                line: 44,
-                column: 21,
+    infos: [
+        Human(
+            HumanInfo {
+                message: "Level 0 error",
+                location: Location {
+                    file: "src/tests.rs",
+                    line: 44,
+                    column: 21,
+                },
             },
-        },
-        HumanInfo {
-            message: "Level 1 error",
-            location: Location {
-                file: "src/tests.rs",
-                line: 48,
-                column: 14,
+        ),
+        Human(
+            HumanInfo {
+                message: "Level 1 error",
+                location: Location {
+                    file: "src/tests.rs",
+                    line: 48,
+                    column: 14,
+                },
             },
-        },
-        HumanInfo {
-            message: "Level 2 error",
-            location: Location {
-                file: "src/tests.rs",
-                line: 52,
-                column: 14,
+        ),
+        Human(
+            HumanInfo {
+                message: "Level 2 error",
+                location: Location {
+                    file: "src/tests.rs",
+                    line: 52,
+                    column: 14,
+                },
             },
-        },
+        ),
     ],
-    machine: [],
     source: Some(
         SourceError(
             ParseBoolError,

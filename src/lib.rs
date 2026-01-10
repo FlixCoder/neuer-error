@@ -16,15 +16,22 @@ mod results;
 
 pub use self::{
 	error::{CtxError, CtxErrorImpl},
-	results::{ConvertResult, CtxResultExt, ResultExt},
+	results::{ConvertOption, ConvertResult, CtxResultExt, ResultExt},
 };
+
+pub mod traits {
+	//! All traits that need to be in scope for	comfortable usage.
+	pub use crate::{ConvertOption as _, ConvertResult as _, CtxResultExt as _, ResultExt as _};
+}
 
 /// `Result` type alias using the crate's [`CtxError`] type.
 pub type Result<T, E = CtxError> = ::core::result::Result<T, E>;
 
-pub mod traits {
-	//! All traits that need to be in scope for	comfortable usage.
-	pub use crate::{ConvertResult as _, CtxResultExt as _, ResultExt as _};
+/// Create a `Result::Ok` value with [`CtxError`] as given error type.
+#[inline(always)]
+#[expect(non_snake_case, reason = "Mimics Result::Ok")]
+pub const fn Ok<T>(value: T) -> Result<T> {
+	Result::Ok(value)
 }
 
 #[cfg(test)]
