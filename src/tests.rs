@@ -209,6 +209,60 @@ fn multi_errors() {
 	assert_eq!(errors.len(), 2);
 }
 
+#[cfg(all(not(feature = "send"), not(feature = "sync")))]
+#[test]
+#[allow(clippy::undocumented_unsafe_blocks, reason = "For test")]
+fn no_send_sync() {
+	#[derive(Debug)]
+	struct Source;
+	impl Display for Source {
+		fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+			f.write_str("Source")
+		}
+	}
+	impl Error for Source {}
+	unsafe impl !Send for Source {}
+	unsafe impl !Sync for Source {}
+
+	_ = CtxError::from_source(Source);
+}
+
+#[cfg(all(feature = "send", not(feature = "sync")))]
+#[test]
+#[allow(clippy::undocumented_unsafe_blocks, reason = "For test")]
+fn send_not_sync() {
+	#[derive(Debug)]
+	struct Source;
+	impl Display for Source {
+		fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+			f.write_str("Source")
+		}
+	}
+	impl Error for Source {}
+	unsafe impl Send for Source {}
+	unsafe impl !Sync for Source {}
+
+	_ = CtxError::from_source(Source);
+}
+
+#[cfg(all(feature = "send", feature = "sync"))]
+#[test]
+#[allow(clippy::undocumented_unsafe_blocks, reason = "For test")]
+fn send_sync() {
+	#[derive(Debug)]
+	struct Source;
+	impl Display for Source {
+		fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+			f.write_str("Source")
+		}
+	}
+	impl Error for Source {}
+	unsafe impl Send for Source {}
+	unsafe impl Sync for Source {}
+
+	_ = CtxError::from_source(Source);
+}
+
 #[cfg(all(not(feature = "alloc"), not(feature = "std")))]
 #[test]
 fn no_std() {
