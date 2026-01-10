@@ -1,5 +1,7 @@
 //! Helpers on `Result` types for conversion and context addition.
 
+use ::core::panic::Location;
+
 use crate::{
 	CtxError,
 	features::{AnyDebugSendSync, ErrorSendSync},
@@ -17,14 +19,10 @@ pub trait CtxResultExt: Sized {
 	/// Add human context to the error via a closure.
 	#[track_caller]
 	#[must_use]
-	#[inline]
 	fn context_with<F, C>(self, context_fn: F) -> Self
 	where
 		F: FnOnce() -> C,
-		C: ToString,
-	{
-		CtxResultExt::context(self, context_fn())
-	}
+		C: ToString;
 
 	/// Add machine context to the error.
 	///
@@ -40,14 +38,10 @@ pub trait CtxResultExt: Sized {
 	/// This will not override existing attachments. If you want to replace and override any
 	/// existing attachments of the same type, use `attach_override` instead.
 	#[must_use]
-	#[inline]
 	fn attach_with<F, C>(self, context_fn: F) -> Self
 	where
 		F: FnOnce() -> C,
-		C: AnyDebugSendSync + 'static,
-	{
-		CtxResultExt::attach(self, context_fn())
-	}
+		C: AnyDebugSendSync + 'static;
 
 	/// Set machine context in the error.
 	///
@@ -63,14 +57,10 @@ pub trait CtxResultExt: Sized {
 	/// This will override existing attachments of the same type. If you want to add attachments of
 	/// the same type, use `attach` instead.
 	#[must_use]
-	#[inline]
 	fn attach_override_with<F, C>(self, context_fn: F) -> Self
 	where
 		F: FnOnce() -> C,
-		C: AnyDebugSendSync + 'static,
-	{
-		CtxResultExt::attach_override(self, context_fn())
-	}
+		C: AnyDebugSendSync + 'static;
 }
 
 impl<T> CtxResultExt for Result<T, CtxError> {
@@ -80,7 +70,19 @@ impl<T> CtxResultExt for Result<T, CtxError> {
 	where
 		C: ToString,
 	{
-		self.map_err(|err| err.context(context))
+		let location = Location::caller();
+		self.map_err(|err| err.context_provided_location(context, location))
+	}
+
+	#[track_caller]
+	#[inline]
+	fn context_with<F, C>(self, context_fn: F) -> Self
+	where
+		F: FnOnce() -> C,
+		C: ToString,
+	{
+		let location = Location::caller();
+		self.map_err(|err| err.context_provided_location(context_fn(), location))
 	}
 
 	#[inline]
@@ -92,17 +94,35 @@ impl<T> CtxResultExt for Result<T, CtxError> {
 	}
 
 	#[inline]
+	fn attach_with<F, C>(self, context_fn: F) -> Self
+	where
+		F: FnOnce() -> C,
+		C: AnyDebugSendSync + 'static,
+	{
+		self.map_err(|err| err.attach(context_fn()))
+	}
+
+	#[inline]
 	fn attach_override<C>(self, context: C) -> Self
 	where
 		C: AnyDebugSendSync + 'static,
 	{
 		self.map_err(|err| err.attach_override(context))
 	}
+
+	#[inline]
+	fn attach_override_with<F, C>(self, context_fn: F) -> Self
+	where
+		F: FnOnce() -> C,
+		C: AnyDebugSendSync + 'static,
+	{
+		self.map_err(|err| err.attach_override(context_fn()))
+	}
 }
 
 
 /// Helper on `Result`s with external `Error`s for conversion to our `CtxError`.
-pub trait ConvertResult<T>: Sized {
+pub trait ConvertResult<T, E>: Sized {
 	/// Add human context to the error.
 	#[track_caller]
 	fn context<C>(self, context: C) -> Result<T, CtxError>
@@ -111,14 +131,10 @@ pub trait ConvertResult<T>: Sized {
 
 	/// Add human context to the error via a closure.
 	#[track_caller]
-	#[inline]
 	fn context_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
 	where
-		F: FnOnce() -> C,
-		C: ToString,
-	{
-		ConvertResult::context(self, context_fn())
-	}
+		F: FnOnce(&E) -> C,
+		C: ToString;
 
 	/// Add machine context to the error.
 	///
@@ -132,14 +148,10 @@ pub trait ConvertResult<T>: Sized {
 	///
 	/// This will not override existing attachments. If you want to replace and override any
 	/// existing attachments of the same type, use `attach_override` instead.
-	#[inline]
 	fn attach_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
 	where
-		F: FnOnce() -> C,
-		C: AnyDebugSendSync + 'static,
-	{
-		ConvertResult::attach(self, context_fn())
-	}
+		F: FnOnce(&E) -> C,
+		C: AnyDebugSendSync + 'static;
 
 	/// Set machine context in the error.
 	///
@@ -153,17 +165,13 @@ pub trait ConvertResult<T>: Sized {
 	///
 	/// This will override existing attachments of the same type. If you want to add attachments of
 	/// the same type, use `attach` instead.
-	#[inline]
 	fn attach_override_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
 	where
-		F: FnOnce() -> C,
-		C: AnyDebugSendSync + 'static,
-	{
-		ConvertResult::attach_override(self, context_fn())
-	}
+		F: FnOnce(&E) -> C,
+		C: AnyDebugSendSync + 'static;
 }
 
-impl<T, E> ConvertResult<T> for Result<T, E>
+impl<T, E> ConvertResult<T, E> for Result<T, E>
 where
 	E: ErrorSendSync + 'static,
 {
@@ -173,7 +181,22 @@ where
 	where
 		C: ToString,
 	{
-		self.map_err(|err| CtxError::new_with_source(context, err))
+		let location = Location::caller();
+		self.map_err(|err| CtxError::from_source(err).context_provided_location(context, location))
+	}
+
+	#[track_caller]
+	#[inline]
+	fn context_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
+	where
+		F: FnOnce(&E) -> C,
+		C: ToString,
+	{
+		let location = Location::caller();
+		self.map_err(|err| {
+			let context = context_fn(&err);
+			CtxError::from_source(err).context_provided_location(context, location)
+		})
 	}
 
 	#[inline]
@@ -185,11 +208,35 @@ where
 	}
 
 	#[inline]
+	fn attach_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
+	where
+		F: FnOnce(&E) -> C,
+		C: AnyDebugSendSync + 'static,
+	{
+		self.map_err(|err| {
+			let attach = context_fn(&err);
+			CtxError::from_source(err).attach(attach)
+		})
+	}
+
+	#[inline]
 	fn attach_override<C>(self, context: C) -> Result<T, CtxError>
 	where
 		C: AnyDebugSendSync + 'static,
 	{
 		self.map_err(|err| CtxError::from_source(err).attach_override(context))
+	}
+
+	#[inline]
+	fn attach_override_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
+	where
+		F: FnOnce(&E) -> C,
+		C: AnyDebugSendSync + 'static,
+	{
+		self.map_err(|err| {
+			let attach = context_fn(&err);
+			CtxError::from_source(err).attach_override(attach)
+		})
 	}
 }
 

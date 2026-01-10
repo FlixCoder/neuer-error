@@ -13,11 +13,11 @@ use crate::features::{AnyDebugSendSync, Container, ErrorSendSync, Stack};
 /// Error information for humans.
 /// Error message with location information.
 #[derive(Debug)]
-struct HumanInfo {
+pub(crate) struct HumanInfo {
 	/// Message text.
-	message: String,
+	pub(crate) message: String,
 	/// Location of occurrence.
-	location: &'static Location<'static>,
+	pub(crate) location: &'static Location<'static>,
 }
 
 /// Error information for machines.
@@ -30,9 +30,16 @@ struct MachineInfo {
 
 /// Generic rich error type for use within `Result`s, for libraries and applications.
 ///
-/// When using the `Display` implementation, you can use `{:#}` to get a compact single-line version
-/// instead of multi-line formatted.
-#[derive(Debug, Default)]
+/// ## Error Formatting
+///
+/// The normal `Debug` implementation (`"{err:?}"`) will print the error with multi-line formatting,
+/// exactly how `Display` is doing it. The alternate `Debug` implementation (`"{err:#?}"`) will show
+/// the pretty-printed usual debug representation of the internal types.
+///
+/// When using the `Display` implementation, the normal implementation (`"{err}"`) will use
+/// multi-line formatting. You can use the alternate format (`{err:#}`) to get a compact single-line
+/// version. instead of multi-line formatted.
+#[derive(Default)]
 pub struct CtxError {
 	/// Contextual information for humans.
 	human: Stack<HumanInfo>,
@@ -40,6 +47,20 @@ pub struct CtxError {
 	machine: Stack<MachineInfo>,
 	/// Source error.
 	source: Option<Container<dyn ErrorSendSync>>,
+}
+
+impl Debug for CtxError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+		if f.alternate() {
+			f.debug_struct("CtxError")
+				.field("human", &self.human)
+				.field("machine", &self.machine)
+				.field("source", &self.source)
+				.finish()
+		} else {
+			Display::fmt(self, f)
+		}
+	}
 }
 
 impl Display for CtxError {
@@ -69,11 +90,11 @@ impl Display for CtxError {
 		let mut source = self.source.as_deref().map(|e| e as &(dyn Error + 'static));
 		while let Some(err) = source {
 			if f.alternate() {
-				write!(f, "; caused by {err}")?;
+				write!(f, "; caused by: {err}")?;
 			} else {
 				writeln!(f)?;
 				writeln!(f, "|")?;
-				writeln!(f, "|- caused by {err}")?;
+				write!(f, "|- caused by: {err}")?;
 			}
 
 			source = err.source();
@@ -88,6 +109,7 @@ impl CtxError {
 	/// Create new error.
 	#[track_caller]
 	#[must_use]
+	#[inline]
 	pub fn new<T: ToString>(message: T) -> Self {
 		let mut human = Stack::new();
 		human.push(HumanInfo { message: message.to_string(), location: Location::caller() });
@@ -97,6 +119,7 @@ impl CtxError {
 	/// Create new error from source error.
 	#[track_caller]
 	#[must_use]
+	#[inline]
 	pub fn new_with_source<T, E>(message: T, source: E) -> Self
 	where
 		T: ToString,
@@ -109,6 +132,7 @@ impl CtxError {
 
 	/// Convert source error.
 	#[must_use]
+	#[inline]
 	pub fn from_source<E>(source: E) -> Self
 	where
 		E: ErrorSendSync + 'static,
@@ -119,6 +143,7 @@ impl CtxError {
 	/// Add human context to the error.
 	#[track_caller]
 	#[must_use]
+	#[inline]
 	pub fn context<C>(mut self, context: C) -> Self
 	where
 		C: ToString,
@@ -128,11 +153,28 @@ impl CtxError {
 		self
 	}
 
+	/// Add human context to the error, where the location was tracked outside already.
+	/// This is needed, since `#[track_caller]` cannot be applied to closures yet.
+	#[must_use]
+	pub(crate) fn context_provided_location<C>(
+		mut self,
+		context: C,
+		location: &'static Location<'static>,
+	) -> Self
+	where
+		C: ToString,
+	{
+		let context = HumanInfo { message: context.to_string(), location };
+		self.human.push(context);
+		self
+	}
+
 	/// Add machine context to the error.
 	///
 	/// This will not override existing attachments. If you want to replace and override any
 	/// existing attachments of the same type, use `attach_override` instead.
 	#[must_use]
+	#[inline]
 	pub fn attach<C>(mut self, context: C) -> Self
 	where
 		C: AnyDebugSendSync + 'static,
@@ -154,11 +196,17 @@ impl CtxError {
 		let context = MachineInfo { attachment: Container::new(context) };
 		self.machine.retain(|ctx| {
 			#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
-			let any = &ctx.attachment as &(dyn Any + 'static);
+			let any = (ctx.attachment.as_ref()) as &(dyn Any + 'static);
 			!any.is::<C>()
 		});
 		self.machine.push(context);
 		self
+	}
+
+	/// Get an iterator over the human context.
+	#[cfg(test)] // Only used for tests.
+	pub(crate) fn contexts(&self) -> impl Iterator<Item = &'_ HumanInfo> {
+		self.human.iter().rev()
 	}
 
 	/// Get the machine context attachment of the given type.
@@ -179,8 +227,16 @@ impl CtxError {
 		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
 		self.machine
 			.iter()
+			.rev() // Catch the newest attachment first.
 			.map(|ctx| ctx.attachment.as_ref() as &(dyn Any + 'static))
 			.filter_map(|ctx| ctx.downcast_ref())
+	}
+
+	/// Get the source error.
+	#[must_use]
+	#[inline]
+	pub fn source(&self) -> Option<&(dyn ErrorSendSync + 'static)> {
+		self.source.as_deref()
 	}
 
 	/// Wrap this error into a [`CtxErrorImpl`] that implements [`Error`].
@@ -248,5 +304,21 @@ impl CtxErrorImpl {
 	#[inline]
 	pub fn into_inner(self) -> CtxError {
 		self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::process::Termination for CtxError {
+	fn report(self) -> std::process::ExitCode {
+		self.attachment::<std::process::ExitCode>()
+			.copied()
+			.unwrap_or(std::process::ExitCode::FAILURE)
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::process::Termination for CtxErrorImpl {
+	fn report(self) -> std::process::ExitCode {
+		std::process::Termination::report(self.0)
 	}
 }

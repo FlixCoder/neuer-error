@@ -22,7 +22,7 @@ pub use self::{
 /// `Result` type alias using the crate's [`CtxError`] type.
 pub type Result<T, E = CtxError> = ::core::result::Result<T, E>;
 
-pub mod prelude {
+pub mod traits {
 	//! All traits that need to be in scope for	comfortable usage.
 	pub use crate::{ConvertResult as _, CtxResultExt as _, ResultExt as _};
 }

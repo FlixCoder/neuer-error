@@ -1,49 +1,217 @@
-//! Tests for the error types.
+//! Crate tests.
 
-use ::core::fmt::{Debug, Display, Formatter, Result as FmtResult};
+use ::core::{
+	error::Error,
+	fmt::{Display, Formatter, Result as FmtResult},
+	panic::Location,
+};
 
-use crate::{ConvertResult, CtxResultExt, Result};
+use crate::*;
 
-#[allow(dead_code, reason = "Example")]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
-enum ErrorStatus {
-	/// Not retryable.
-	#[default]
-	Permanent,
-	/// Retryable.
-	Temporary,
-	/// Was already retried, but still failed again.
-	Persistent,
-}
 
-impl Display for ErrorStatus {
+#[derive(Debug)]
+struct SourceError(core::str::ParseBoolError);
+
+impl Display for SourceError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-		let s = match self {
-			Self::Permanent => "permanent",
-			Self::Temporary => "temporary",
-			Self::Persistent => "persistent",
-		};
-		f.write_str(s)
+		f.write_str("SourceError occurred")
 	}
 }
 
-#[derive(Debug)]
-struct ComplexInfo {
-	_weird_stuff: Box<dyn Debug + Send + Sync>,
+impl Error for SourceError {
+	fn source(&self) -> Option<&(dyn Error + 'static)> {
+		Some(&self.0)
+	}
 }
 
-fn failing_io() -> Result<(), std::io::Error> {
-	Err(std::io::Error::new(std::io::ErrorKind::NotFound, "IO"))
+impl From<core::str::ParseBoolError> for SourceError {
+	fn from(value: core::str::ParseBoolError) -> Self {
+		Self(value)
+	}
 }
 
-fn failing() -> Result<()> {
-	failing_io()
-		.context("test")
-		.attach_override(ErrorStatus::Temporary)
-		.attach(ComplexInfo { _weird_stuff: Box::new("") })
+
+fn source() -> Result<bool, core::str::ParseBoolError> {
+	"wahr".parse::<bool>()
+}
+
+fn source_source() -> Result<(), SourceError> {
+	source()?;
+	Ok(())
+}
+
+fn level0() -> Result<()> {
+	source_source().context("Level 0 error")
+}
+
+fn level1() -> Result<()> {
+	level0().context("Level 1 error")
+}
+
+fn level2() -> Result<()> {
+	level1().context("Level 2 error")
+}
+
+
+#[cfg(feature = "std")] // Tested with std, works also with core.
+#[test]
+fn debug_impl() {
+	let error = level2().unwrap_err();
+	let normal = format!("{error:?}");
+	let alternate = format!("{error:#?}");
+
+	assert_eq!(
+		normal,
+		"Level 2 error\n|- at src/tests.rs:52:14\n|\nLevel 1 error\n|- at src/tests.rs:48:14\n|\nLevel 0 error\n|- at src/tests.rs:44:21\n|\n|- caused by: SourceError occurred\n|\n|- caused by: provided string was not `true` or `false`"
+	);
+	assert_eq!(
+		alternate,
+		r#"
+CtxError {
+    human: [
+        HumanInfo {
+            message: "Level 0 error",
+            location: Location {
+                file: "src/tests.rs",
+                line: 44,
+                column: 21,
+            },
+        },
+        HumanInfo {
+            message: "Level 1 error",
+            location: Location {
+                file: "src/tests.rs",
+                line: 48,
+                column: 14,
+            },
+        },
+        HumanInfo {
+            message: "Level 2 error",
+            location: Location {
+                file: "src/tests.rs",
+                line: 52,
+                column: 14,
+            },
+        },
+    ],
+    machine: [],
+    source: Some(
+        SourceError(
+            ParseBoolError,
+        ),
+    ),
+}
+		"#
+		.trim()
+	);
+}
+
+#[cfg(feature = "std")] // Tested with std, works also with core.
+#[test]
+fn display_impl() {
+	let error = level2().unwrap_err();
+	let normal = format!("{error}");
+	let alternate = format!("{error:#}");
+
+	assert_eq!(
+		normal,
+		"Level 2 error\n|- at src/tests.rs:52:14\n|\nLevel 1 error\n|- at src/tests.rs:48:14\n|\nLevel 0 error\n|- at src/tests.rs:44:21\n|\n|- caused by: SourceError occurred\n|\n|- caused by: provided string was not `true` or `false`"
+	);
+	assert_eq!(
+		alternate,
+		"Level 2 error (at src/tests.rs:52:14); Level 1 error (at src/tests.rs:48:14); Level 0 error (at src/tests.rs:44:21); caused by: SourceError occurred; caused by: provided string was not `true` or `false`"
+	);
 }
 
 #[test]
-fn error_context() {
-	_ = failing().unwrap_err();
+fn error_wrapper() {
+	let error = level1().unwrap_err().into_error();
+	assert!(Error::source(&error).is_some());
+
+	let error = error.into_inner();
+	assert!(error.source().is_some());
+}
+
+#[test]
+fn context() {
+	let error = CtxError::new("0").context("1").context("2");
+	let mut numbers = error.contexts().map(|ctx| ctx.message.parse::<u8>().unwrap());
+	assert_eq!(numbers.next(), Some(2));
+	assert_eq!(numbers.next(), Some(1));
+	assert_eq!(numbers.next(), Some(0));
+	assert_eq!(numbers.next(), None);
+}
+
+#[test]
+fn context_correct_locations() {
+	const START: u32 = line!();
+	fn ensure_location(location: &Location) {
+		assert!(location.file().ends_with("tests.rs"));
+		assert!(location.line() > START && location.line() < END);
+	}
+
+	let error = CtxError::new("test").context("test");
+	error.contexts().map(|ctx| ctx.location).for_each(ensure_location);
+
+	let src = "".parse::<bool>().unwrap_err();
+	let result: Result<()> =
+		Err(CtxError::new_with_source("test", src)).context("test").context_with(|| "test");
+	result.unwrap_err().contexts().map(|ctx| ctx.location).for_each(ensure_location);
+
+	let result: Result<bool> = source().context("test");
+	result.unwrap_err().contexts().map(|ctx| ctx.location).for_each(ensure_location);
+
+	let result: Result<bool> = source().context_with(|_| "test");
+	result.unwrap_err().contexts().map(|ctx| ctx.location).for_each(ensure_location);
+
+	#[expect(clippy::items_after_statements, reason = "We need the line number of the end")]
+	const END: u32 = line!();
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn exit_code() {
+	use std::process::{ExitCode, Termination};
+
+	let error = CtxError::new("test");
+	assert_eq!(Termination::report(error), ExitCode::FAILURE);
+
+	let error = CtxError::new("test").attach(ExitCode::SUCCESS);
+	assert_eq!(Termination::report(error), ExitCode::SUCCESS);
+}
+
+#[test]
+fn attach_override() {
+	let error =
+		CtxError::new("test").attach_override(false).attach_override('c').attach_override(true);
+	assert!(*error.attachment::<bool>().unwrap());
+	assert_eq!(error.attachments::<bool>().count(), 1);
+}
+
+#[test]
+fn attach() {
+	let error = CtxError::new("test").attach(false).attach('c').attach(true);
+	assert!(*error.attachment::<bool>().unwrap());
+	assert_eq!(error.attachments::<bool>().count(), 2);
+}
+
+#[cfg(feature = "std")] // Tested with std, works also with core.
+#[test]
+fn multi_errors() {
+	let mut errors: Vec<CtxError> = Vec::new();
+	level1().or_collect(&mut errors);
+	level2().or_collect(&mut errors);
+	assert_eq!(errors.len(), 2);
+}
+
+#[cfg(all(not(feature = "alloc"), not(feature = "std")))]
+#[test]
+fn no_std() {
+	todo!()
+}
+
+#[cfg(not(feature = "std"))]
+#[test]
+fn alloc() {
+	todo!()
 }
