@@ -10,10 +10,13 @@ readme = "README.md"
 
 [features]
 default = ["std", "send", "sync"]
-std = ["alloc"] # Use the standard library.
-alloc = [] # Use the `alloc` crate.
-send = [] # Error type must be `Send`.
-sync = ["send"] # Error type must be `Sync`.
+# Use the standard library.
+# Provides interaction with `ExitCode` termination.
+std = []
+# Error types must be `Send`.
+send = []
+# Error types must be `Sync`.
+sync = ["send"]
 
 [dependencies]
 

@@ -263,14 +263,8 @@ fn send_sync() {
 	_ = CtxError::from_source(Source);
 }
 
-#[cfg(all(not(feature = "alloc"), not(feature = "std")))]
-#[test]
-fn no_std() {
-	todo!()
-}
-
 #[cfg(not(feature = "std"))]
 #[test]
-fn alloc() {
+fn no_std() {
 	todo!()
 }

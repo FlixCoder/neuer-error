@@ -6,7 +6,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::std_instead_of_core, clippy::std_instead_of_alloc, clippy::alloc_instead_of_core)]
 
-#[cfg(feature = "alloc")]
 extern crate alloc;
 
 mod error;

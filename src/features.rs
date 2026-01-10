@@ -2,6 +2,7 @@
 
 use ::core::{any::Any, error::Error, fmt::Debug};
 
+
 /// Send trait, if feature is enabled, otherwise nothing.
 #[cfg(feature = "send")]
 pub trait PotentiallySend: Send {}
@@ -38,13 +39,8 @@ impl<T: Error + SendSync> ErrorSendSync for T {}
 
 
 /// Box type.
-#[cfg(feature = "alloc")]
 pub type Box<T> = alloc::boxed::Box<T>;
-
 /// Vec type for stacks.
-#[cfg(feature = "alloc")]
 pub type Vec<T> = alloc::vec::Vec<T>;
-
 /// String type.
-#[cfg(feature = "alloc")]
 pub type String = alloc::string::String;
