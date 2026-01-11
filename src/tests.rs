@@ -1,6 +1,6 @@
 //! Crate tests.
 
-use ::alloc::{format, vec::Vec};
+use ::alloc::{borrow::ToOwned, format, vec::Vec};
 use ::core::{
 	error::Error,
 	fmt::{Display, Formatter, Result as FmtResult},
@@ -95,9 +95,10 @@ fn error_wrapper() {
 	assert!(error.source().is_some());
 }
 
+/// Make sure all the usual types work as context messages.
 #[test]
 fn context() {
-	let error = CtxError::new("0").context("1").context("2");
+	let error = CtxError::new("0").context("1".to_owned()).context("2");
 	let mut numbers = error.contexts().map(|ctx| ctx.message.parse::<u8>().unwrap());
 	assert_eq!(numbers.next(), Some(2));
 	assert_eq!(numbers.next(), Some(1));

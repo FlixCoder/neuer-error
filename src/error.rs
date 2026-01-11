@@ -1,6 +1,6 @@
 //! Error type implementation.
 
-use ::alloc::{string::ToString, vec};
+use ::alloc::{borrow::Cow, boxed::Box, vec, vec::Vec};
 use ::core::{
 	any::Any,
 	error::Error,
@@ -8,14 +8,14 @@ use ::core::{
 	panic::Location,
 };
 
-use crate::features::{AnyDebugSendSync, Box, ErrorSendSync, String, Vec};
+use crate::features::{AnyDebugSendSync, ErrorSendSync};
 
 /// Error information for humans.
 /// Error message with location information.
 #[derive(Debug)]
 pub(crate) struct HumanInfo {
 	/// Message text.
-	pub(crate) message: String,
+	pub(crate) message: Cow<'static, str>,
 	/// Location of occurrence.
 	pub(crate) location: &'static Location<'static>,
 }
@@ -37,9 +37,9 @@ pub(crate) enum Info {
 	/// Contextual information for machines.
 	Machine(MachineInfo),
 }
-// Ensure size of Context is as expected. Can be adjusted though.
+// Ensure niche-optimization is active.
 const _: () = {
-	assert!(size_of::<Info>() == 32);
+	assert!(size_of::<Info>() == size_of::<HumanInfo>());
 };
 
 /// Generic rich error type for use within `Result`s, for libraries and applications.
@@ -138,11 +138,12 @@ impl CtxError {
 	#[track_caller]
 	#[must_use]
 	#[inline]
-	pub fn new<T: ToString>(message: T) -> Self {
-		let infos = vec![Info::Human(HumanInfo {
-			message: message.to_string(),
-			location: Location::caller(),
-		})];
+	pub fn new<C>(context: C) -> Self
+	where
+		C: Into<Cow<'static, str>>,
+	{
+		let infos =
+			vec![Info::Human(HumanInfo { message: context.into(), location: Location::caller() })];
 		Self(CtxErrorImpl { infos, ..Default::default() })
 	}
 
@@ -150,15 +151,13 @@ impl CtxError {
 	#[track_caller]
 	#[must_use]
 	#[inline]
-	pub fn new_with_source<T, E>(message: T, source: E) -> Self
+	pub fn new_with_source<C, E>(context: C, source: E) -> Self
 	where
-		T: ToString,
+		C: Into<Cow<'static, str>>,
 		E: ErrorSendSync + 'static,
 	{
-		let infos = vec![Info::Human(HumanInfo {
-			message: message.to_string(),
-			location: Location::caller(),
-		})];
+		let infos =
+			vec![Info::Human(HumanInfo { message: context.into(), location: Location::caller() })];
 		Self(CtxErrorImpl { infos, source: Some(Box::new(source)) })
 	}
 
@@ -178,7 +177,7 @@ impl CtxError {
 	#[inline]
 	pub fn context<C>(self, context: C) -> Self
 	where
-		C: ToString,
+		C: Into<Cow<'static, str>>,
 	{
 		Self(self.0.context(context))
 	}
@@ -265,9 +264,9 @@ impl CtxErrorImpl {
 	#[inline]
 	pub fn context<C>(mut self, context: C) -> Self
 	where
-		C: ToString,
+		C: Into<Cow<'static, str>>,
 	{
-		let context = HumanInfo { message: context.to_string(), location: Location::caller() };
+		let context = HumanInfo { message: context.into(), location: Location::caller() };
 		self.infos.push(Info::Human(context));
 		self
 	}
@@ -292,20 +291,34 @@ impl CtxErrorImpl {
 	/// This will override existing attachments of the same type. If you want to add attachments of
 	/// the same type, use `attach` instead.
 	#[must_use]
-	pub fn attach_override<C>(mut self, context: C) -> Self
+	pub fn attach_override<C>(mut self, mut context: C) -> Self
 	where
 		C: AnyDebugSendSync + 'static,
 	{
-		let context = MachineInfo { attachment: Box::new(context) };
-		self.infos.retain(|info| match info {
-			Info::Human(_) => true,
+		let mut inserted = false;
+		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
+		self.infos.retain_mut(|info| match info {
 			Info::Machine(ctx) => {
-				#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
-				let any = (ctx.attachment.as_ref()) as &(dyn Any + 'static);
-				!any.is::<C>()
+				if let Some(content) =
+					(ctx.attachment.as_mut() as &mut (dyn Any + 'static)).downcast_mut::<C>()
+				{
+					if !inserted {
+						core::mem::swap(content, &mut context);
+						inserted = true;
+						true // First attachment of same type, was replaced with new value, so keep it.
+					} else {
+						false // Another attachment of the same type, remove duplicate.
+					}
+				} else {
+					true // Attachment of different type.
+				}
 			}
+			_ => true,
 		});
-		self.infos.push(Info::Machine(context));
+		if !inserted {
+			// No existing attachment of the same type was found to be replaced, so add a new one.
+			self.infos.push(Info::Machine(MachineInfo { attachment: Box::new(context) }));
+		}
 		self
 	}
 

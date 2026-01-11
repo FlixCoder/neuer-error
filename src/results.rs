@@ -1,6 +1,6 @@
 //! Helpers on `Result` types for conversion and context addition.
 
-use ::alloc::string::ToString;
+use ::alloc::borrow::Cow;
 
 use crate::{
 	CtxError,
@@ -14,7 +14,7 @@ pub trait CtxResultExt: Sized {
 	#[must_use]
 	fn context<C>(self, context: C) -> Self
 	where
-		C: ToString;
+		C: Into<Cow<'static, str>>;
 
 	/// Add human context to the error via a closure.
 	#[track_caller]
@@ -22,7 +22,7 @@ pub trait CtxResultExt: Sized {
 	fn context_with<F, C>(self, context_fn: F) -> Self
 	where
 		F: FnOnce() -> C,
-		C: ToString;
+		C: Into<Cow<'static, str>>;
 
 	/// Add machine context to the error.
 	///
@@ -68,7 +68,7 @@ impl<T> CtxResultExt for Result<T, CtxError> {
 	#[inline]
 	fn context<C>(self, context: C) -> Self
 	where
-		C: ToString,
+		C: Into<Cow<'static, str>>,
 	{
 		// Cannot use `map_err` because closures cannot have `#[track_caller]` yet.
 		match self {
@@ -82,7 +82,7 @@ impl<T> CtxResultExt for Result<T, CtxError> {
 	fn context_with<F, C>(self, context_fn: F) -> Self
 	where
 		F: FnOnce() -> C,
-		C: ToString,
+		C: Into<Cow<'static, str>>,
 	{
 		// Cannot use `map_err` because closures cannot have `#[track_caller]` yet.
 		match self {
@@ -133,14 +133,14 @@ pub trait ConvertResult<T, E>: Sized {
 	#[track_caller]
 	fn context<C>(self, context: C) -> Result<T, CtxError>
 	where
-		C: ToString;
+		C: Into<Cow<'static, str>>;
 
 	/// Add human context to the error via a closure.
 	#[track_caller]
 	fn context_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
 	where
 		F: FnOnce(&E) -> C,
-		C: ToString;
+		C: Into<Cow<'static, str>>;
 
 	/// Add machine context to the error.
 	///
@@ -185,7 +185,7 @@ where
 	#[inline]
 	fn context<C>(self, context: C) -> Result<T, CtxError>
 	where
-		C: ToString,
+		C: Into<Cow<'static, str>>,
 	{
 		// Cannot use `map_err` because closures cannot have `#[track_caller]` yet.
 		match self {
@@ -199,7 +199,7 @@ where
 	fn context_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
 	where
 		F: FnOnce(&E) -> C,
-		C: ToString,
+		C: Into<Cow<'static, str>>,
 	{
 		// Cannot use `map_err` because closures cannot have `#[track_caller]` yet.
 		match self {
@@ -259,14 +259,14 @@ pub trait ConvertOption<T>: Sized {
 	#[track_caller]
 	fn context<C>(self, context: C) -> Result<T, CtxError>
 	where
-		C: ToString;
+		C: Into<Cow<'static, str>>;
 
 	/// Convert `None` to an error and add human context to the error via a closure.
 	#[track_caller]
 	fn context_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
 	where
 		F: FnOnce() -> C,
-		C: ToString;
+		C: Into<Cow<'static, str>>;
 
 	/// Convert `None` to an error and add machine context to the error.
 	///
@@ -308,7 +308,7 @@ impl<T> ConvertOption<T> for Option<T> {
 	#[inline]
 	fn context<C>(self, context: C) -> Result<T, CtxError>
 	where
-		C: ToString,
+		C: Into<Cow<'static, str>>,
 	{
 		// Cannot use `ok_or_else` because closures cannot have `#[track_caller]` yet.
 		match self {
@@ -322,7 +322,7 @@ impl<T> ConvertOption<T> for Option<T> {
 	fn context_with<F, C>(self, context_fn: F) -> Result<T, CtxError>
 	where
 		F: FnOnce() -> C,
-		C: ToString,
+		C: Into<Cow<'static, str>>,
 	{
 		// Cannot use `ok_or_else` because closures cannot have `#[track_caller]` yet.
 		match self {

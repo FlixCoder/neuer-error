@@ -42,11 +42,3 @@ impl<T: Any + Debug + SendSync> AnyDebugSendSync for T {}
 /// Error trait with send/sync.
 pub trait ErrorSendSync: Error + SendSync {}
 impl<T: Error + SendSync> ErrorSendSync for T {}
-
-
-/// Box type.
-pub type Box<T> = alloc::boxed::Box<T>;
-/// Vec type for stacks.
-pub type Vec<T> = alloc::vec::Vec<T>;
-/// String type.
-pub type String = alloc::string::String;
