@@ -365,6 +365,7 @@ impl CtxErrorImpl {
 }
 
 impl From<CtxError> for CtxErrorImpl {
+	#[inline]
 	fn from(err: CtxError) -> Self {
 		err.0
 	}
@@ -382,6 +383,7 @@ where
 }
 
 impl Error for CtxErrorImpl {
+	#[inline]
 	fn source(&self) -> Option<&(dyn Error + 'static)> {
 		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
 		self.source.as_deref().map(|e| e as &(dyn Error + 'static))
@@ -389,6 +391,7 @@ impl Error for CtxErrorImpl {
 }
 
 impl AsRef<dyn Error> for CtxError {
+	#[inline]
 	fn as_ref(&self) -> &(dyn Error + 'static) {
 		&self.0
 	}
@@ -396,6 +399,7 @@ impl AsRef<dyn Error> for CtxError {
 
 #[cfg(feature = "send")]
 impl AsRef<dyn Error + Send> for CtxError {
+	#[inline]
 	fn as_ref(&self) -> &(dyn Error + Send + 'static) {
 		&self.0
 	}
@@ -403,12 +407,14 @@ impl AsRef<dyn Error + Send> for CtxError {
 
 #[cfg(all(feature = "send", feature = "sync"))]
 impl AsRef<dyn Error + Send + Sync> for CtxError {
+	#[inline]
 	fn as_ref(&self) -> &(dyn Error + Send + Sync + 'static) {
 		&self.0
 	}
 }
 
 impl From<CtxError> for Box<dyn Error> {
+	#[inline]
 	fn from(this: CtxError) -> Self {
 		Box::new(this.into_error())
 	}
@@ -416,6 +422,7 @@ impl From<CtxError> for Box<dyn Error> {
 
 #[cfg(feature = "send")]
 impl From<CtxError> for Box<dyn Error + Send> {
+	#[inline]
 	fn from(this: CtxError) -> Self {
 		Box::new(this.into_error())
 	}
@@ -423,6 +430,7 @@ impl From<CtxError> for Box<dyn Error + Send> {
 
 #[cfg(all(feature = "send", feature = "sync"))]
 impl From<CtxError> for Box<dyn Error + Send + Sync> {
+	#[inline]
 	fn from(this: CtxError) -> Self {
 		Box::new(this.into_error())
 	}
@@ -431,6 +439,7 @@ impl From<CtxError> for Box<dyn Error + Send + Sync> {
 
 #[cfg(feature = "std")]
 impl std::process::Termination for CtxError {
+	#[inline]
 	fn report(self) -> std::process::ExitCode {
 		std::process::Termination::report(self.0)
 	}
@@ -438,6 +447,7 @@ impl std::process::Termination for CtxError {
 
 #[cfg(feature = "std")]
 impl std::process::Termination for CtxErrorImpl {
+	#[inline]
 	fn report(self) -> std::process::ExitCode {
 		self.attachment::<std::process::ExitCode>()
 			.copied()
