@@ -26,10 +26,16 @@ pub trait PotentiallySync {}
 impl<T> PotentiallySync for T {}
 
 /// Activated Send / Sync traits, if enabled.
+#[diagnostic::on_unimplemented(
+	message = "Make sure your type implements Send/Sync according to the activated crate features"
+)]
 pub trait SendSync: PotentiallySend + PotentiallySync {}
 impl<T: PotentiallySend + PotentiallySync> SendSync for T {}
 
 /// Any + Debug traits with send/sync.
+#[diagnostic::on_unimplemented(
+	message = "Make sure your type implements Debug and Send/Sync according to the activated crate features"
+)]
 pub trait AnyDebugSendSync: Any + Debug + SendSync {}
 impl<T: Any + Debug + SendSync> AnyDebugSendSync for T {}
 

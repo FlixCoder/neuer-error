@@ -5,7 +5,6 @@ use ::core::{
 	any::Any,
 	error::Error,
 	fmt::{Debug, Display, Formatter, Result as FmtResult},
-	ops::{Deref, DerefMut},
 	panic::Location,
 };
 
@@ -45,6 +44,9 @@ const _: () = {
 
 /// Generic rich error type for use within `Result`s, for libraries and applications.
 ///
+/// Add human context information, including code locations, via the `context` method.
+/// Attach machine context information via the `attach` and `attach_override` methods.
+///
 /// ## Error Formatting
 ///
 /// The normal `Debug` implementation (`"{err:?}"`) will print the error with multi-line formatting,
@@ -55,7 +57,11 @@ const _: () = {
 /// multi-line formatting. You can use the alternate format (`{err:#}`) to get a compact single-line
 /// version. instead of multi-line formatted.
 #[derive(Default)]
-pub struct CtxError {
+pub struct CtxError(CtxErrorImpl);
+
+/// Inner implementation of [`CtxError`] that implements [`Error`].
+#[derive(Default)]
+pub struct CtxErrorImpl {
 	/// Contextual error information.
 	infos: Vec<Info>,
 	/// Source error.
@@ -63,6 +69,18 @@ pub struct CtxError {
 }
 
 impl Debug for CtxError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+		Debug::fmt(&self.0, f)
+	}
+}
+
+impl Display for CtxError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+		Display::fmt(&self.0, f)
+	}
+}
+
+impl Debug for CtxErrorImpl {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
 		if f.alternate() {
 			f.debug_struct("CtxError")
@@ -75,7 +93,7 @@ impl Debug for CtxError {
 	}
 }
 
-impl Display for CtxError {
+impl Display for CtxErrorImpl {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
 		let mut human = self.contexts().peekable();
 		if human.peek().is_none() {
@@ -125,7 +143,7 @@ impl CtxError {
 			message: message.to_string(),
 			location: Location::caller(),
 		})];
-		Self { infos, ..Default::default() }
+		Self(CtxErrorImpl { infos, ..Default::default() })
 	}
 
 	/// Create new error from source error.
@@ -141,7 +159,7 @@ impl CtxError {
 			message: message.to_string(),
 			location: Location::caller(),
 		})];
-		Self { infos, source: Some(Box::new(source)) }
+		Self(CtxErrorImpl { infos, source: Some(Box::new(source)) })
 	}
 
 	/// Convert source error.
@@ -151,7 +169,94 @@ impl CtxError {
 	where
 		E: ErrorSendSync + 'static,
 	{
-		Self { source: Some(Box::new(source)), ..Default::default() }
+		Self(CtxErrorImpl { source: Some(Box::new(source)), ..Default::default() })
+	}
+
+	/// Add human context to the error.
+	#[track_caller]
+	#[must_use]
+	#[inline]
+	pub fn context<C>(self, context: C) -> Self
+	where
+		C: ToString,
+	{
+		Self(self.0.context(context))
+	}
+
+	/// Add machine context to the error.
+	///
+	/// This will not override existing attachments. If you want to replace and override any
+	/// existing attachments of the same type, use `attach_override` instead.
+	#[must_use]
+	#[inline]
+	pub fn attach<C>(self, context: C) -> Self
+	where
+		C: AnyDebugSendSync + 'static,
+	{
+		Self(self.0.attach(context))
+	}
+
+	/// Set machine context in the error.
+	///
+	/// This will override existing attachments of the same type. If you want to add attachments of
+	/// the same type, use `attach` instead.
+	#[must_use]
+	pub fn attach_override<C>(self, context: C) -> Self
+	where
+		C: AnyDebugSendSync + 'static,
+	{
+		Self(self.0.attach_override(context))
+	}
+
+	/// Get an iterator over the human context infos.
+	#[inline]
+	#[cfg_attr(not(test), expect(unused, reason = "For consistency"))]
+	pub(crate) fn contexts(&self) -> impl Iterator<Item = &'_ HumanInfo> {
+		self.0.contexts()
+	}
+
+	/// Get an iterator over the machine context attachments of the given type.
+	#[inline]
+	pub fn attachments<C>(&self) -> impl Iterator<Item = &'_ C>
+	where
+		C: AnyDebugSendSync + 'static,
+	{
+		self.0.attachments()
+	}
+
+	/// Get the machine context attachment of the given type.
+	#[must_use]
+	#[inline]
+	pub fn attachment<C>(&self) -> Option<&C>
+	where
+		C: AnyDebugSendSync + 'static,
+	{
+		self.0.attachment()
+	}
+
+	/// Get the source error.
+	#[must_use]
+	#[inline]
+	pub fn source(&self) -> Option<&(dyn ErrorSendSync + 'static)> {
+		self.0.source.as_deref()
+	}
+
+	/// Unwrap this error into a [`CtxErrorImpl`] that implements [`Error`]. Note however, that it
+	/// does not offer all of the functionality and might be unwieldy for other general purposes
+	/// than interfacing with other error types.
+	#[must_use]
+	#[inline]
+	pub fn into_error(self) -> CtxErrorImpl {
+		self.0
+	}
+}
+
+impl CtxErrorImpl {
+	/// Wrap this error back into a [`CtxError`] that offers all of the functionality.
+	#[must_use]
+	#[inline]
+	pub const fn wrap(self) -> CtxError {
+		CtxError(self)
 	}
 
 	/// Add human context to the error.
@@ -244,94 +349,85 @@ impl CtxError {
 	{
 		self.attachments().next()
 	}
+}
 
-	/// Get the source error.
-	#[must_use]
-	#[inline]
-	pub fn source(&self) -> Option<&(dyn ErrorSendSync + 'static)> {
-		self.source.as_deref()
-	}
-
-	/// Wrap this error into a [`CtxErrorImpl`] that implements [`Error`].
-	#[must_use]
-	#[inline]
-	pub const fn into_error(self) -> CtxErrorImpl {
-		CtxErrorImpl(self)
+impl From<CtxError> for CtxErrorImpl {
+	fn from(err: CtxError) -> Self {
+		err.0
 	}
 }
 
+#[diagnostic::do_not_recommend]
 impl<E> From<E> for CtxError
 where
 	E: ErrorSendSync + 'static,
 {
 	#[inline]
 	fn from(err: E) -> Self {
-		CtxError::from_source(err)
-	}
-}
-
-/// Wrapper for [`CtxError`] that implements [`Error`].
-#[derive(Debug, Default)]
-pub struct CtxErrorImpl(pub CtxError);
-
-impl From<CtxError> for CtxErrorImpl {
-	#[inline]
-	fn from(err: CtxError) -> Self {
-		Self(err)
-	}
-}
-
-impl Deref for CtxErrorImpl {
-	type Target = CtxError;
-
-	#[inline]
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl DerefMut for CtxErrorImpl {
-	#[inline]
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
-impl Display for CtxErrorImpl {
-	#[inline]
-	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-		Display::fmt(&self.0, f)
+		Self::from_source(err)
 	}
 }
 
 impl Error for CtxErrorImpl {
 	fn source(&self) -> Option<&(dyn Error + 'static)> {
 		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
-		self.0.source.as_deref().map(|e| e as &(dyn Error + 'static))
+		self.source.as_deref().map(|e| e as &(dyn Error + 'static))
 	}
 }
 
-impl CtxErrorImpl {
-	/// Unwrap into the inner [`CtxError`].
-	#[must_use]
-	#[inline]
-	pub fn into_inner(self) -> CtxError {
-		self.0
+impl AsRef<dyn Error> for CtxError {
+	fn as_ref(&self) -> &(dyn Error + 'static) {
+		&self.0
 	}
 }
+
+#[cfg(feature = "send")]
+impl AsRef<dyn Error + Send> for CtxError {
+	fn as_ref(&self) -> &(dyn Error + Send + 'static) {
+		&self.0
+	}
+}
+
+#[cfg(all(feature = "send", feature = "sync"))]
+impl AsRef<dyn Error + Send + Sync> for CtxError {
+	fn as_ref(&self) -> &(dyn Error + Send + Sync + 'static) {
+		&self.0
+	}
+}
+
+impl From<CtxError> for Box<dyn Error> {
+	fn from(this: CtxError) -> Self {
+		Box::new(this.into_error())
+	}
+}
+
+#[cfg(feature = "send")]
+impl From<CtxError> for Box<dyn Error + Send> {
+	fn from(this: CtxError) -> Self {
+		Box::new(this.into_error())
+	}
+}
+
+#[cfg(all(feature = "send", feature = "sync"))]
+impl From<CtxError> for Box<dyn Error + Send + Sync> {
+	fn from(this: CtxError) -> Self {
+		Box::new(this.into_error())
+	}
+}
+
 
 #[cfg(feature = "std")]
 impl std::process::Termination for CtxError {
 	fn report(self) -> std::process::ExitCode {
-		self.attachment::<std::process::ExitCode>()
-			.copied()
-			.unwrap_or(std::process::ExitCode::FAILURE)
+		std::process::Termination::report(self.0)
 	}
 }
 
 #[cfg(feature = "std")]
 impl std::process::Termination for CtxErrorImpl {
 	fn report(self) -> std::process::ExitCode {
-		std::process::Termination::report(self.0)
+		self.attachment::<std::process::ExitCode>()
+			.copied()
+			.unwrap_or(std::process::ExitCode::FAILURE)
 	}
 }

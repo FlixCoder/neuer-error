@@ -91,7 +91,7 @@ fn error_wrapper() {
 	let error = level1().unwrap_err().into_error();
 	assert!(Error::source(&error).is_some());
 
-	let error = error.into_inner();
+	let error = error.wrap();
 	assert!(error.source().is_some());
 }
 
