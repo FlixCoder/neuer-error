@@ -1,9 +1,8 @@
 //! Typical error handling in no-std, but alloc, embedded environments.
-#![no_std]
 #![allow(
 	clippy::undocumented_unsafe_blocks,
 	clippy::missing_docs_in_private_items,
-	clippy::print_stderr,
+	clippy::unwrap_used,
 	reason = "Example"
 )]
 
@@ -32,8 +31,8 @@ fn run() -> Result<()> {
 	Ok(())
 }
 
-fn main() -> Result<()> {
-	run().context("Failed running software")
+fn main() {
+	run().context("Failed running software").unwrap();
 }
 
 

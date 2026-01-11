@@ -1,5 +1,6 @@
 //! Error type implementation.
 
+use ::alloc::{string::ToString, vec};
 use ::core::{
 	any::Any,
 	error::Error,

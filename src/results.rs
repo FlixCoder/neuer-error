@@ -1,5 +1,7 @@
 //! Helpers on `Result` types for conversion and context addition.
 
+use ::alloc::string::ToString;
+
 use crate::{
 	CtxError,
 	features::{AnyDebugSendSync, ErrorSendSync},

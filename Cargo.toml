@@ -26,6 +26,7 @@ sync = ["send"]
 [dependencies]
 
 [dev-dependencies]
+regex = { version = "1.12.2", default-features = false, features = ["unicode"] }
 
 
 [lints.rust]
