@@ -6,13 +6,18 @@
 	reason = "Example"
 )]
 
-use ::contextual_errors::{CtxError, Result, traits::*};
+use ::contextual_errors::{CtxError, Result, provided_attachments, traits::*};
 
 /// The usual error message contains code file locations, so it is not always suitable for UI
 /// errors. We can simply attach user friendly messages to the errors and still keep debuggable
 /// errors for logs.
 #[derive(Debug)]
 struct UserErrorMessage(String);
+
+// Automatically create a helper to easily retrieve the attachment.
+provided_attachments!(
+	user_errors(multiple: UserErrorMessage) -> impl Iterator<Item = &String> { |msgs| msgs.map(|UserErrorMessage(msg)| msg) }
+);
 
 #[derive(Debug)]
 struct MyUser;
@@ -35,9 +40,9 @@ fn main() {
 	let result =
 		change_user_name().attach_with(|| UserErrorMessage("Could not rename user".to_owned()));
 	if let Err(err) = result {
-		eprint!("User error: ");
-		for user_msg in err.attachments::<UserErrorMessage>() {
-			eprintln!("{}", user_msg.0);
+		eprint!("User errors: ");
+		for user_msg in err.user_errors() {
+			eprintln!("{user_msg}");
 		}
 	}
 }

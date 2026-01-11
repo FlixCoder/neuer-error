@@ -6,7 +6,7 @@
 	reason = "Example"
 )]
 
-use ::contextual_errors::{CtxError, Result, traits::*};
+use ::contextual_errors::{CtxError, Result, provided_attachments, traits::*};
 use ::std::time::Duration;
 
 /// Mark errors	whether they can be retried and/or were already retried.
@@ -20,6 +20,11 @@ enum ErrorStatus {
 	/// Was already retried, but still failed again.
 	Persistent,
 }
+
+// Automatically create a helper to easily retrieve the attachment.
+provided_attachments!(
+	status(single: ErrorStatus) -> ErrorStatus { |status| status.copied().unwrap_or_default() }
+);
 
 /// Web client does some request. Returns some client-library error.
 fn do_request(_request: String) -> Result<(), std::io::Error> {
@@ -58,9 +63,7 @@ fn main() {
 				break;
 			}
 			Err(err) => {
-				if err.attachment::<ErrorStatus>().copied().unwrap_or_default()
-					== ErrorStatus::Temporary
-				{
+				if err.status() == ErrorStatus::Temporary {
 					eprintln!("Error: {err:#}; Retrying request in a bit..");
 					std::thread::sleep(Duration::from_secs(2));
 				} else {

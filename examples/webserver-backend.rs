@@ -8,42 +8,6 @@
 
 use ::contextual_errors::{CtxError, Result, traits::*};
 
-/// Fake axum trait `IntoResponse`, converting the type to an HTTP response.
-trait IntoResponse {
-	fn into_response(self) -> (StatusCode, String);
-}
-
-impl IntoResponse for () {
-	fn into_response(self) -> (StatusCode, String) {
-		(StatusCode::Ok, String::new())
-	}
-}
-
-impl<T, E> IntoResponse for Result<T, E>
-where
-	T: IntoResponse,
-	E: IntoResponse,
-{
-	fn into_response(self) -> (StatusCode, String) {
-		match self {
-			Ok(v) => v.into_response(),
-			Err(e) => e.into_response(),
-		}
-	}
-}
-
-/// Fake HTTP status code from usual libraries.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
-enum StatusCode {
-	#[default]
-	InternalError,
-	BadRequest,
-	NotFound,
-	Ok,
-}
-
-// Now our code follows.
-
 /// Wrapper to convert errors to HTTP responses automatically.
 #[derive(Debug)]
 struct ToResponse(CtxError);
@@ -94,4 +58,41 @@ fn main() {
 	let request = "bob";
 	let (status, message) = handle_request(request).into_response();
 	eprintln!("{status:?}: {message}");
+}
+
+
+/* Fake types and traits, similar to how they are found in axum and http. */
+
+/// Fake axum trait `IntoResponse`, converting the type to an HTTP response.
+trait IntoResponse {
+	fn into_response(self) -> (StatusCode, String);
+}
+
+impl IntoResponse for () {
+	fn into_response(self) -> (StatusCode, String) {
+		(StatusCode::Ok, String::new())
+	}
+}
+
+impl<T, E> IntoResponse for Result<T, E>
+where
+	T: IntoResponse,
+	E: IntoResponse,
+{
+	fn into_response(self) -> (StatusCode, String) {
+		match self {
+			Ok(v) => v.into_response(),
+			Err(e) => e.into_response(),
+		}
+	}
+}
+
+/// Fake HTTP status code from usual libraries.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
+enum StatusCode {
+	#[default]
+	InternalError,
+	BadRequest,
+	NotFound,
+	Ok,
 }
