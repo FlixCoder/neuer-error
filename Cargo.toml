@@ -3,10 +3,15 @@ name = "contextual-errors"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.92"
+description = "Ergonomic error handling for machines and humans."
+categories = ["no-std", "rust-patterns"]
+keywords = ["error", "error-handling", "no-std"]
+license = "MIT"
 authors = ["Flix <felix.dommes@rwth-aachen.de>"]
 homepage = "https://github.com/FlixCoder/contextual-errors"
 repository = "https://github.com/FlixCoder/contextual-errors"
 readme = "README.md"
+exclude = ["/.github"]
 
 [features]
 default = ["std", "send", "sync"]

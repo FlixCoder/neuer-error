@@ -1,0 +1,127 @@
+[config]
+skip_core_tasks = true
+default_to_workspace = false
+time_summary = true
+
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+
+[tasks.install-rust-nightly-rustfmt]
+private = true
+description = "Installs nightly Rust with rustfmt (hopefully)."
+toolchain = "nightly"
+install_crate = { rustup_component_name = "rustfmt", binary = "rustfmt", test_arg = "--version" }
+
+[tasks.install-rust-toolchain]
+private = true
+description = "Installs the used Rust toolchain with specified components."
+command = "rustup"
+args = ["show"]
+
+
+[tasks.format]
+description = "Formats all Rust code."
+install_crate = false
+command = "cargo"
+args = ["+nightly", "fmt"]
+dependencies = ["install-rust-nightly-rustfmt"]
+
+[tasks.formatting]
+description = "Checks all Rust code formatting."
+install_crate = false
+command = "cargo"
+args = ["+nightly", "fmt", "--", "--check"]
+dependencies = ["install-rust-nightly-rustfmt"]
+
+
+[tasks.clippy-default]
+install_crate = false
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.clippy-none]
+install_crate = false
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--no-default-features", "--", "-D", "warnings"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.clippy-std]
+install_crate = false
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--no-default-features", "--features", "std", "--", "-D", "warnings"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.clippy-no-send-sync]
+install_crate = false
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--no-default-features", "--features", "std", "--", "-D", "warnings"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.clippy-send]
+install_crate = false
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--no-default-features", "--features", "std,send", "--", "-D", "warnings"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.clippy-send-sync]
+install_crate = false
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--no-default-features", "--features", "std,send,sync", "--", "-D", "warnings"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.clippy-all]
+install_crate = false
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.clippy]
+description = "Runs clippy with all various feature sets."
+dependencies = [
+	"clippy-default",
+	"clippy-none",
+	"clippy-std",
+	"clippy-no-send-sync",
+	"clippy-send",
+	"clippy-send-sync",
+	"clippy-all",
+]
+
+
+[tasks.test-all-features]
+description = "Runs all tests via cargo test with all features."
+install_crate = false
+command = "cargo"
+args = ["test", "--workspace", "--all-features"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.test-no-features]
+description = "Runs all tests via cargo test with all features."
+install_crate = false
+command = "cargo"
+args = ["test", "--workspace", "--no-default-features"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.test]
+description = "Runs all tests via cargo test."
+dependencies = ["test-all-features", "test-no-features"]
+
+
+[tasks.stable-ci]
+description = """
+Runs all CI checks with stable Rust (all but formatting).
+"""
+dependencies = ["test", "clippy"]
+
+[tasks.ci]
+description = """
+Runs all checks necessary for CI to pass.
+This includes formatting, clippy and tests currently.
+"""
+dependencies = ["test", "clippy", "formatting"]
+
+
+[tasks.default]
+alias = "ci"

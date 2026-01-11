@@ -1,5 +1,6 @@
 //! Crate tests.
 
+use ::alloc::{format, vec::Vec};
 use ::core::{
 	error::Error,
 	fmt::{Display, Formatter, Result as FmtResult},
@@ -53,7 +54,6 @@ fn level2() -> Result<()> {
 }
 
 
-#[cfg(feature = "std")] // Tested with std, works also with core.
 #[test]
 fn debug_impl() {
 	let error = level2().unwrap_err();
@@ -111,7 +111,6 @@ CtxError {
 	);
 }
 
-#[cfg(feature = "std")] // Tested with std, works also with core.
 #[test]
 fn display_impl() {
 	let error = level2().unwrap_err();
@@ -200,7 +199,6 @@ fn attach() {
 	assert_eq!(error.attachments::<bool>().count(), 2);
 }
 
-#[cfg(feature = "std")] // Tested with std, works also with core.
 #[test]
 fn multi_errors() {
 	let mut errors: Vec<CtxError> = Vec::new();
