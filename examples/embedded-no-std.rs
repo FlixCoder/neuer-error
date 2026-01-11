@@ -9,12 +9,12 @@
 extern crate alloc;
 
 use ::alloc::alloc::{GlobalAlloc, Layout};
-use ::neuer_error::{CtxError, Result, traits::*};
 use ::core::{
 	cell::UnsafeCell,
 	ptr::null_mut,
 	sync::atomic::{AtomicUsize, Ordering},
 };
+use ::neuer_error::{CtxError, Result, traits::*};
 
 
 fn self_test() -> Result<()> {
