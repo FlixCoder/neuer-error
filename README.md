@@ -23,6 +23,7 @@ An error handling library designed to be:
 ## Why a new (German: neuer) error library?
 
 Long story, you can [view it here](why-another-lib.md).
+
 TLDR: I wasn't satisfied with my previous approach and existing libraries I know. And I was inspired by a blog post to experiment myself with error handling design.
 
 ## Usage
