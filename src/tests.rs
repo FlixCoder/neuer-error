@@ -13,12 +13,12 @@ use crate::*;
 
 #[test]
 fn debug_impl() {
-	let error = level2().unwrap_err();
+	let error = level2().unwrap_err().attach(0);
 	let normal = format!("{error:?}");
 	let alternate = format!("{error:#?}");
 
 	let matcher = Regex::new(r"Level 2 error\n|- at src/tests\.rs:\d+:\d+\n|\nLevel 1 error\n|- at src/tests\.rs:\d+:\d+\n|\nLevel 0 error\n|- at src/tests\.rs:\d+:\d+\n|\n|- caused by: SourceError occurred\n|\n|- caused by: provided string was not `true` or `false`").expect("failed compiling regex");
-	assert!(matcher.is_match(&normal));
+	assert!(matcher.is_match(&normal), "Found: {normal}");
 
 	let matcher = Regex::new(
 		r#"
@@ -54,6 +54,11 @@ CtxError \{
                 \},
             \},
         \),
+        Machine\(
+            MachineInfo \{
+                attachment: 0,
+            \},
+        \),
     \],
     source: Some\(
         SourceError\(
@@ -65,20 +70,20 @@ CtxError \{
 		.trim(),
 	)
 	.expect("failed compiling regex");
-	assert!(matcher.is_match(&alternate));
+	assert!(matcher.is_match(&alternate), "Found: {alternate}");
 }
 
 #[test]
 fn display_impl() {
-	let error = level2().unwrap_err();
+	let error = level2().unwrap_err().attach(0);
 	let normal = format!("{error}");
 	let alternate = format!("{error:#}");
 
 	let matcher = Regex::new(r"Level 2 error\n|- at src/tests\.rs:\d+:\d+\n|\nLevel 1 error\n|- at src/tests\.rs:\d+:\d+\n|\nLevel 0 error\n|- at src/tests\.rs:\d+:\d+\n|\n|- caused by: SourceError occurred\n|\n|- caused by: provided string was not `true` or `false`").expect("failed compiling regex");
-	assert!(matcher.is_match(&normal));
+	assert!(matcher.is_match(&normal), "Found: {normal}");
 
 	let matcher = Regex::new(r"Level 2 error \(at src/tests\.rs:\d+:\d+\); Level 1 error \(at src/tests\.rs:\d+:\d+\); Level 0 error \(at src/tests\.rs:\d+:\d+\); caused by: SourceError occurred; caused by: provided string was not `true` or `false`").expect("failed compiling regex");
-	assert!(matcher.is_match(&alternate));
+	assert!(matcher.is_match(&alternate), "Found: {alternate}");
 }
 
 #[test]
