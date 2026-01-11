@@ -23,7 +23,7 @@ enum ErrorStatus {
 
 /// Web client does some request. Returns some client-library error.
 fn do_request(_request: String) -> Result<(), std::io::Error> {
-	Err(std::io::Error::new(std::io::ErrorKind::NotFound, "IO"))
+	Err(std::io::Error::new(std::io::ErrorKind::NotFound, "Interface eth1 not found"))
 }
 
 /// Your client method fetching some data from the server.
@@ -62,9 +62,10 @@ fn main() {
 					== ErrorStatus::Temporary
 				{
 					eprintln!("Error: {err:#}; Retrying request in a bit..");
-					std::thread::sleep(Duration::from_millis(500));
+					std::thread::sleep(Duration::from_secs(2));
 				} else {
-					eprintln!("Error fetching data: {err}");
+					eprintln!("Permanent error fetching data: {err}");
+					break;
 				}
 			}
 		}

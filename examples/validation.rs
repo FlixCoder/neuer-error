@@ -56,13 +56,14 @@ impl User {
 }
 
 fn main() {
-	match User::new(UserData { id: 1, name: "uwu".to_owned(), balance: 12345 }) {
+	match User::new(UserData { id: 3, name: "".to_owned(), balance: -12345 }) {
 		Ok(_user) => {
 			eprintln!("User valid");
 		}
 		Err(errors) => {
 			for error in errors {
 				eprintln!("Error: {error}");
+				eprintln!();
 			}
 		}
 	}

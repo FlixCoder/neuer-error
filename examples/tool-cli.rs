@@ -19,7 +19,7 @@ fn call_preprocessor() -> Result<()> {
 
 fn compile_my_code() -> Result<()> {
 	ensure_project_validity().context("project must be valid for compiling")?;
-	call_preprocessor().context("proprocessor failed")?;
+	call_preprocessor().context("preprocessor failed")?;
 	Ok(())
 }
 
