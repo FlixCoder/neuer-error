@@ -9,7 +9,7 @@
 extern crate alloc;
 
 use ::alloc::alloc::{GlobalAlloc, Layout};
-use ::contextual_errors::{CtxError, Result, traits::*};
+use ::neuer_error::{CtxError, Result, traits::*};
 use ::core::{
 	cell::UnsafeCell,
 	ptr::null_mut,

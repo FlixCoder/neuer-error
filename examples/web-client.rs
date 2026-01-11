@@ -6,7 +6,7 @@
 	reason = "Example"
 )]
 
-use ::contextual_errors::{CtxError, Result, provided_attachments, traits::*};
+use ::neuer_error::{CtxError, Result, provided_attachments, traits::*};
 use ::std::time::Duration;
 
 /// Mark errors	whether they can be retried and/or were already retried.

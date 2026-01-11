@@ -1,5 +1,5 @@
 [package]
-name = "contextual-errors"
+name = "neuer-error"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.92"
@@ -8,8 +8,8 @@ categories = ["no-std", "rust-patterns"]
 keywords = ["error", "error-handling", "no-std"]
 license = "MIT"
 authors = ["Flix <felix.dommes@rwth-aachen.de>"]
-homepage = "https://github.com/FlixCoder/contextual-errors"
-repository = "https://github.com/FlixCoder/contextual-errors"
+homepage = "https://github.com/FlixCoder/neuer-error"
+repository = "https://github.com/FlixCoder/neuer-error"
 readme = "README.md"
 exclude = ["/.github"]
 

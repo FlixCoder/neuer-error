@@ -6,7 +6,7 @@
 	reason = "Example"
 )]
 
-use ::contextual_errors::Result;
+use ::neuer_error::Result;
 
 use self::library::CtxErrorAttachments;
 
@@ -16,7 +16,7 @@ use self::library::CtxErrorAttachments;
 /// When providing attachments, library authors should make use of the `provided_attachments!`
 /// macro!
 mod library {
-	use ::contextual_errors::{CtxError, Result, provided_attachments, traits::*};
+	use ::neuer_error::{CtxError, Result, provided_attachments, traits::*};
 
 	/// Kinds of errors that are interesting to match on for library users.
 	/// If it is only interesting to humans, it can be iin the context instead.

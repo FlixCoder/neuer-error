@@ -6,7 +6,7 @@
 	reason = "Example"
 )]
 
-use ::contextual_errors::{CtxError, Result, provided_attachments, traits::*};
+use ::neuer_error::{CtxError, Result, provided_attachments, traits::*};
 
 /// The usual error message contains code file locations, so it is not always suitable for UI
 /// errors. We can simply attach user friendly messages to the errors and still keep debuggable

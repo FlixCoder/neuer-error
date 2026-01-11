@@ -12,7 +12,7 @@
 /// Simple getters without type transformation:
 ///
 /// ```rust
-/// # use contextual_errors::provided_attachments;
+/// # use neuer_error::provided_attachments;
 /// #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// enum Retryable { Yes, No }
 ///
@@ -27,7 +27,7 @@
 /// before returning it:
 ///
 /// ```rust
-/// # use contextual_errors::provided_attachments;
+/// # use neuer_error::provided_attachments;
 /// #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// enum Retryable { Yes, No }
 ///
@@ -43,7 +43,7 @@
 /// into your return type:
 ///
 /// ```rust
-/// # use contextual_errors::provided_attachments;
+/// # use neuer_error::provided_attachments;
 /// #[derive(Debug, PartialEq, Clone)]
 /// struct UserInfo(String);
 ///

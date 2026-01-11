@@ -6,7 +6,7 @@
 	reason = "Example"
 )]
 
-use ::contextual_errors::{CtxError, Result, traits::*};
+use ::neuer_error::{CtxError, Result, traits::*};
 
 /// Wrapper to convert errors to HTTP responses automatically.
 #[derive(Debug)]
