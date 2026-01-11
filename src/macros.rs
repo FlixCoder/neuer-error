@@ -10,7 +10,9 @@
 /// ## Usage
 ///
 /// Simple getters without type transformation:
+///
 /// ```rust
+/// # use contextual_errors::provided_attachments;
 /// #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// enum Retryable { Yes, No }
 ///
@@ -18,10 +20,14 @@
 /// 	retryable(single: Retryable) -> Option<&Retryable> { |v| v };
 /// );
 /// ```
+///
 /// This will create a method `fn retryable(&self) -> Option<&Retryable>` on `CtxError`.
 ///
 /// You can also make use of the transformation expression that will be applied to the attachment
-/// before returning it: ```rust
+/// before returning it:
+///
+/// ```rust
+/// # use contextual_errors::provided_attachments;
 /// #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// enum Retryable { Yes, No }
 ///
@@ -29,19 +35,25 @@
 /// 	retryable(single: Retryable) -> Retryable { |retry| retry.copied().unwrap_or(Retryable::No) };
 /// );
 /// ```
+///
 /// This will create a method `fn retryable(&self) -> Retryable` on `CtxError`. The closure receives
 /// the `Option<&Retryable>` and returns a `Retryable`.
 ///
 /// Finally, you can also retrieve multiple attachments of the same type and transform the iterator
-/// into your return type: ```rust
+/// into your return type:
+///
+/// ```rust
+/// # use contextual_errors::provided_attachments;
 /// #[derive(Debug, PartialEq, Clone)]
 /// struct UserInfo(String);
 ///
 /// provided_attachments!(
-/// 	user_info(multiple: UserInfo) -> String { |iter| iter.map(|UserInfo(s)| s).collect() };
+/// 	user_info(multiple: UserInfo) -> String { |iter| iter.map(|UserInfo(s)| s.as_str()).collect() };
 /// );
-/// This will create a method `fn user_info(&self) -> String` on `CtxError`, which collects all `UserInfo` attachments, unpacks them and collects them into a single `String`.
 /// ```
+///
+/// This will create a method `fn user_info(&self) -> String` on `CtxError`, which collects all
+/// `UserInfo` attachments, unpacks them and collects them into a single `String`.
 #[macro_export]
 macro_rules! provided_attachments {
 	// Declare rule for single attachment.
