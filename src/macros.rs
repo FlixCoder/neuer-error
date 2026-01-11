@@ -1,8 +1,8 @@
 //! Macros for the users.
 
-/// Create a helper trait `CtxErrorAttachments` that is implemented for [`CtxError`], which allows
-/// to directly retrieve your attachments. You can modify visibility and name by re-exporting via
-/// `pub use` if needed.
+/// Create a helper trait `CtxErrorAttachments` that is implemented for
+/// [`CtxError`](crate::CtxError), which allows to directly retrieve your attachments. You can
+/// modify visibility and name by re-exporting via `pub use` if needed.
 ///
 /// This improves discoverability and allows you to unwrap potential new-types you might have had to
 /// use (or wanted to use).

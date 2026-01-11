@@ -27,7 +27,61 @@ TLDR: I wasn't satisfied with my previous approach and existing libraries I know
 
 ## Usage
 
+The best way to see how to use it for your use-case is to check out the [examples](examples).
+Nevertheless, here is a quick demo:
+
+```rust
+// In library/module:
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum Retryable { No, Yes }
+
+// Provide discoverable, typed information for library users.
+provided_attachments!(
+  retryable(single: Retryable) -> bool {
+    |retryable| matches!(retryable, Some(Retryable::Yes))
+  };
+);
+
+fn do_something_internal() -> Result<()> {
+  Err(CtxError::new("Error occurred internally")
+    .attach(Retryable::No))
+}
+
+pub fn do_something() -> Result<()> {
+  do_something_internal().context("Operation failed")
+}
+
+// In consumer/application:
+fn main() {
+  match do_something() {
+    Ok(()) => {}
+    Err(err) if err.retryable() => {
+      eprintln!("Retryable error");
+    }
+    Err(_) => {
+      eprintln!("Non-retryable error");
+    }
+  }
+}
+```
+
+Run `cargo add neuer-error` to add the library to your project.
+
 ## Development
+
+If you want to contribute or have questions, feel free to open issues :)
+Always better to ask before investing too much effort into PRs that I won't accept.
+
+Running all the checks is quite simple:
+
+1. Install [cargo-make](https://github.com/sagiegurari/cargo-make): `cargo install cargo-make`.
+2. Optional, but recommended: Put `search_project_root = true` into cargo-make's user configuration, so that `cargo make` can be run from sub-folders.
+3. From the project directory, you can run the following tasks:
+   - **Run all checks that are done in CI**: `cargo make ci` or just `cargo make`.
+   - **Format code**: `cargo make format`.
+   - **Check formatting**: `cargo make formatting`.
+   - **Run all tests via cargo test**: `cargo make test`.
+   - **Run clippy for all feature sets, failing on any warnings**: `cargo make clippy`.
 
 ## Minimum supported Rust version (MSRV)
 
