@@ -1,6 +1,6 @@
 //! Crate tests.
 
-use ::alloc::{borrow::ToOwned, format, vec::Vec};
+use ::alloc::{borrow::ToOwned, format, string::String, vec::Vec};
 use ::core::{
 	error::Error,
 	fmt::{Display, Formatter, Result as FmtResult},
@@ -11,18 +11,30 @@ use ::regex::Regex;
 use crate::*;
 
 
+/// Remove all color codes.
+#[cfg(feature = "colors")]
+fn remove_colors(s: &str) -> String {
+	let regex =
+		Regex::new(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])").expect("invalid ANSI color regex");
+	regex.replace_all(s, "").into_owned()
+}
+#[cfg(not(feature = "colors"))]
+fn remove_colors(s: &str) -> String {
+	s.to_owned()
+}
+
 #[test]
 fn debug_impl() {
 	let error = level2().unwrap_err().attach(0);
-	let normal = format!("{error:?}");
-	let alternate = format!("{error:#?}");
+	let normal = remove_colors(&format!("{error:?}"));
+	let alternate = remove_colors(&format!("{error:#?}"));
 
 	let matcher = Regex::new(r"Level 2 error\n|- at src/tests\.rs:\d+:\d+\n|\nLevel 1 error\n|- at src/tests\.rs:\d+:\d+\n|\nLevel 0 error\n|- at src/tests\.rs:\d+:\d+\n|\n|- caused by: SourceError occurred\n|\n|- caused by: provided string was not `true` or `false`").expect("failed compiling regex");
 	assert!(matcher.is_match(&normal), "Found: {normal}");
 
 	let matcher = Regex::new(
 		r#"
-CtxError \{
+NeuErr \{
     infos: \[
         Human\(
             HumanInfo \{
@@ -76,8 +88,8 @@ CtxError \{
 #[test]
 fn display_impl() {
 	let error = level2().unwrap_err().attach(0);
-	let normal = format!("{error}");
-	let alternate = format!("{error:#}");
+	let normal = remove_colors(&format!("{error}"));
+	let alternate = remove_colors(&format!("{error:#}"));
 
 	let matcher = Regex::new(r"Level 2 error\n|- at src/tests\.rs:\d+:\d+\n|\nLevel 1 error\n|- at src/tests\.rs:\d+:\d+\n|\nLevel 0 error\n|- at src/tests\.rs:\d+:\d+\n|\n|- caused by: SourceError occurred\n|\n|- caused by: provided string was not `true` or `false`").expect("failed compiling regex");
 	assert!(matcher.is_match(&normal), "Found: {normal}");
@@ -98,7 +110,7 @@ fn error_wrapper() {
 /// Make sure all the usual types work as context messages.
 #[test]
 fn context() {
-	let error = CtxError::new("0").context("1".to_owned()).context("2");
+	let error = NeuErr::new("0").context("1".to_owned()).context("2");
 	let mut numbers = error.contexts().map(|ctx| ctx.message.parse::<u8>().unwrap());
 	assert_eq!(numbers.next(), Some(2));
 	assert_eq!(numbers.next(), Some(1));
@@ -114,12 +126,12 @@ fn context_correct_locations() {
 		assert!(location.line() > START && location.line() < END);
 	}
 
-	let error = CtxError::new("test").context("test");
+	let error = NeuErr::new("test").context("test");
 	error.contexts().map(|ctx| ctx.location).for_each(ensure_location);
 
 	let src = "".parse::<bool>().unwrap_err();
 	let result: Result<()> =
-		Err(CtxError::new_with_source("test", src)).context("test").context_with(|| "test");
+		Err(NeuErr::new_with_source("test", src)).context("test").context_with(|| "test");
 	result.unwrap_err().contexts().map(|ctx| ctx.location).for_each(ensure_location);
 
 	let result: Result<bool> = source().context("test");
@@ -137,31 +149,31 @@ fn context_correct_locations() {
 fn exit_code() {
 	use std::process::{ExitCode, Termination};
 
-	let error = CtxError::new("test");
+	let error = NeuErr::new("test");
 	assert_eq!(Termination::report(error), ExitCode::FAILURE);
 
-	let error = CtxError::new("test").attach(ExitCode::SUCCESS);
+	let error = NeuErr::new("test").attach(ExitCode::SUCCESS);
 	assert_eq!(Termination::report(error), ExitCode::SUCCESS);
 }
 
 #[test]
 fn attach_override() {
 	let error =
-		CtxError::new("test").attach_override(false).attach_override('c').attach_override(true);
+		NeuErr::new("test").attach_override(false).attach_override('c').attach_override(true);
 	assert!(*error.attachment::<bool>().unwrap());
 	assert_eq!(error.attachments::<bool>().count(), 1);
 }
 
 #[test]
 fn attach() {
-	let error = CtxError::new("test").attach(false).attach('c').attach(true);
+	let error = NeuErr::new("test").attach(false).attach('c').attach(true);
 	assert!(*error.attachment::<bool>().unwrap());
 	assert_eq!(error.attachments::<bool>().count(), 2);
 }
 
 #[test]
 fn multi_errors() {
-	let mut errors: Vec<CtxError> = Vec::new();
+	let mut errors: Vec<NeuErr> = Vec::new();
 	level1().or_collect(&mut errors);
 	level2().or_collect(&mut errors);
 	assert_eq!(errors.len(), 2);
@@ -181,7 +193,7 @@ fn no_send_sync() {
 	}
 	impl Error for Source {}
 
-	_ = CtxError::from_source(Source(PhantomData));
+	_ = NeuErr::from_source(Source(PhantomData));
 }
 
 #[cfg(all(feature = "send", not(feature = "sync")))]
@@ -198,7 +210,7 @@ fn send_not_sync() {
 	}
 	impl Error for Source {}
 
-	_ = CtxError::from_source(Source(PhantomData));
+	_ = NeuErr::from_source(Source(PhantomData));
 }
 
 #[cfg(all(feature = "send", feature = "sync"))]
@@ -215,7 +227,7 @@ fn send_sync() {
 	}
 	impl Error for Source {}
 
-	_ = CtxError::from_source(Source(PhantomData));
+	_ = NeuErr::from_source(Source(PhantomData));
 }
 
 

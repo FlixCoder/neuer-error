@@ -18,6 +18,8 @@
 //! - Compatible with non-Send/Sync environments, but also with Send/Sync environments ([per feature
 //!   flag](#feature-flags)).
 //! - Out of the box source error chaining.
+//! - No dependencies by default. Optional features may lead to some dependencies.
+//! - No `unsafe` used (yet?).
 //!
 //! ## Why a new (German: neuer) error library?
 //!
@@ -32,7 +34,7 @@
 //! Nevertheless, here is a quick demo:
 //!
 //! ```rust
-//! # use neuer_error::{traits::*, CtxError, Result, provided_attachments};
+//! # use neuer_error::{traits::*, NeuErr, Result, provided_attachments};
 //! // In library/module:
 //! #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 //! pub enum Retryable { No, Yes }
@@ -45,7 +47,7 @@
 //! );
 //!
 //! fn do_something_internal() -> Result<()> {
-//!   Err(CtxError::new("Error occurred internally")
+//!   Err(NeuErr::new("Error occurred internally")
 //!     .attach(Retryable::No))
 //! }
 //!
@@ -69,6 +71,24 @@
 //!
 //! Run `cargo add neuer-error` to add the library to your project.
 //!
+//! ## Comparisons
+//!
+//! ### Anyhow / Eyre
+//!
+//! - `NeuErr` provides a meechanism to discover and retrieve multiple items of typed context
+//!   information, while `anyhow` can `downcast` to its source error types only.
+//! - `NeuErr` captures source locations instead of backtraces by default, which is more efficient
+//!   and works without debug info. I personally also find it easier to read.
+//!
+//! ### Thiserror / Snafu
+//!
+//! - `NeuErr` is a single error type for all errors, so no need for boilerplate, better ergonomics,
+//!   but less type safety and flexibility.
+//! - `NeuErr` captures source location automatically, which `thiserror` does not and `snafu` does
+//!   only when you add the location field to every error variant.
+//! - `NeuErr` prints the full (source) error chain already.
+//! - `NeuErr` does not have procedural macros.
+//!
 //! ## Feature Flags
 //!
 //! **default** -> std, send, sync: Default selected features. Deactivate with
@@ -76,11 +96,15 @@
 //!
 //! **std** (default): Enables use of `std`. Provides interaction with `ExitCode` termination.
 //!
-//! **send** (default): Requires all contained types to be `Send`, so that [`CtxError`] is also
+//! **send** (default): Requires all contained types to be `Send`, so that [`NeuErr`] is also
 //! `Send`.
 //!
-//! **sync** (default) -> send: Requires all contained types to be `Sync`, so that [`CtxError`] is
+//! **sync** (default) -> send: Requires all contained types to be `Sync`, so that [`NeuErr`] is
 //! also `Sync`.
+//!
+//! **colors**: Activates colored error formatting via `yansi` (added dependency). When std it
+//! enabled, it also enables `yansi`'s automatic detection whether to use or not use colors. See
+//! `yansi`'s documentation on details.
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::std_instead_of_core, clippy::std_instead_of_alloc, clippy::alloc_instead_of_core)]
 
@@ -92,7 +116,7 @@ mod macros;
 mod results;
 
 pub use self::{
-	error::{CtxError, CtxErrorImpl},
+	error::{NeuErr, NeuErrImpl},
 	results::{ConvertOption, ConvertResult, CtxResultExt, ResultExt},
 };
 
@@ -101,10 +125,10 @@ pub mod traits {
 	pub use crate::{ConvertOption as _, ConvertResult as _, CtxResultExt as _, ResultExt as _};
 }
 
-/// `Result` type alias using the crate's [`CtxError`] type.
-pub type Result<T, E = CtxError> = ::core::result::Result<T, E>;
+/// `Result` type alias using the crate's [`NeuErr`] type.
+pub type Result<T, E = NeuErr> = ::core::result::Result<T, E>;
 
-/// Create a `Result::Ok` value with [`CtxError`] as given error type.
+/// Create a `Result::Ok` value with [`NeuErr`] as given error type.
 #[inline(always)]
 #[expect(non_snake_case, reason = "Mimics Result::Ok")]
 pub const fn Ok<T>(value: T) -> Result<T> {

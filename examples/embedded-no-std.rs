@@ -14,11 +14,11 @@ use ::core::{
 	ptr::null_mut,
 	sync::atomic::{AtomicUsize, Ordering},
 };
-use ::neuer_error::{CtxError, Result, traits::*};
+use ::neuer_error::{NeuErr, Result, traits::*};
 
 
 fn self_test() -> Result<()> {
-	Err(CtxError::new("Memory error"))
+	Err(NeuErr::new("Memory error"))
 }
 
 fn boot_up() -> Result<()> {

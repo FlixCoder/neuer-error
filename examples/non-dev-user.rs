@@ -6,7 +6,7 @@
 	reason = "Example"
 )]
 
-use ::neuer_error::{CtxError, Result, provided_attachments, traits::*};
+use ::neuer_error::{NeuErr, Result, provided_attachments, traits::*};
 
 /// The usual error message contains code file locations, so it is not always suitable for UI
 /// errors. We can simply attach user friendly messages to the errors and still keep debuggable
@@ -23,7 +23,7 @@ provided_attachments!(
 struct MyUser;
 
 fn fetch_user() -> Result<MyUser> {
-	Err(CtxError::new("Failed!").attach(UserErrorMessage("Invalid user ID 5".to_owned())))
+	Err(NeuErr::new("Failed!").attach(UserErrorMessage("Invalid user ID 5".to_owned())))
 }
 
 fn save_user(_user: MyUser) -> Result<()> {

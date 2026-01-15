@@ -6,11 +6,11 @@
 	reason = "Example"
 )]
 
-use ::neuer_error::{CtxError, Result, traits::*};
+use ::neuer_error::{NeuErr, Result, traits::*};
 
 /// Wrapper to convert errors to HTTP responses automatically.
 #[derive(Debug)]
-struct ToResponse(CtxError);
+struct ToResponse(NeuErr);
 
 impl IntoResponse for ToResponse {
 	fn into_response(self) -> (StatusCode, String) {
@@ -20,26 +20,26 @@ impl IntoResponse for ToResponse {
 	}
 }
 
-impl From<CtxError> for ToResponse {
-	fn from(err: CtxError) -> Self {
+impl From<NeuErr> for ToResponse {
+	fn from(err: NeuErr) -> Self {
 		Self(err)
 	}
 }
 
 /// Request handler for a route.
 ///
-/// The [`CtxError`] is automatically converted to our wrapper. At least if we gave context and use
+/// The [`NeuErr`] is automatically converted to our wrapper. At least if we gave context and use
 /// the question mark operator.
 fn handle_request(user: &str) -> Result<(), ToResponse> {
 	match user {
 		"" => {
-			return Err(CtxError::new("User must not be empty")
+			return Err(NeuErr::new("User must not be empty")
 				.attach(StatusCode::BadRequest)
 				.into());
 		}
 		"alice" => manipulate().context("Failed manipulating")?,
 		not_found => {
-			return Err(CtxError::new(format!("User `{not_found}` was not found"))
+			return Err(NeuErr::new(format!("User `{not_found}` was not found"))
 				.attach(StatusCode::NotFound)
 				.into());
 		}

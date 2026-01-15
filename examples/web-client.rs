@@ -6,7 +6,7 @@
 	reason = "Example"
 )]
 
-use ::neuer_error::{CtxError, Result, provided_attachments, traits::*};
+use ::neuer_error::{NeuErr, Result, provided_attachments, traits::*};
 use ::std::time::Duration;
 
 /// Mark errors	whether they can be retried and/or were already retried.
@@ -41,7 +41,7 @@ fn fetch_data(user: &str) -> Result<()> {
 			std::io::ErrorKind::NetworkDown => ErrorStatus::Temporary,
 			_ => ErrorStatus::Permanent,
 		})
-		.context_with(|| format!("failed fetching data for user {user}"))?;
+		.context_with(|| format!("Failed fetching data for user {user}"))?;
 
 	// Alternative 2.
 	do_request(request).map_err(|err| {
@@ -49,7 +49,7 @@ fn fetch_data(user: &str) -> Result<()> {
 			std::io::ErrorKind::NetworkDown => ErrorStatus::Temporary,
 			_ => ErrorStatus::Permanent,
 		};
-		CtxError::new_with_source(format!("failed fetching data for user {user}"), err)
+		NeuErr::new_with_source(format!("Failed fetching data for user {user}"), err)
 			.attach_override(status)
 	})
 }

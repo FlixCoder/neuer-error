@@ -71,6 +71,18 @@ command = "cargo"
 args = ["clippy", "--workspace", "--all-targets", "--no-default-features", "--features", "std,send,sync", "--", "-D", "warnings"]
 dependencies = ["install-rust-toolchain"]
 
+[tasks.clippy-colors]
+install_crate = false
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--features", "colors", "--", "-D", "warnings"]
+dependencies = ["install-rust-toolchain"]
+
+[tasks.clippy-colors-no-std]
+install_crate = false
+command = "cargo"
+args = ["clippy", "--workspace", "--all-targets", "--no-default-features", "--features", "colors", "--", "-D", "warnings"]
+dependencies = ["install-rust-toolchain"]
+
 [tasks.clippy-all]
 install_crate = false
 command = "cargo"
@@ -86,6 +98,8 @@ dependencies = [
 	"clippy-no-send-sync",
 	"clippy-send",
 	"clippy-send-sync",
+	"clippy-colors",
+	"clippy-colors-no-std",
 	"clippy-all",
 ]
 

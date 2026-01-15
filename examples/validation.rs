@@ -6,7 +6,7 @@
 	reason = "Example"
 )]
 
-use ::neuer_error::{CtxError, Result, traits::*};
+use ::neuer_error::{NeuErr, Result, traits::*};
 
 struct UserData {
 	id: u64,
@@ -15,14 +15,14 @@ struct UserData {
 }
 
 fn validate_id(id: u64) -> Result<()> {
-	if id == 0 { Err(CtxError::new("ID must be non-zero")) } else { Ok(()) }
+	if id == 0 { Err(NeuErr::new("ID must be non-zero")) } else { Ok(()) }
 }
 
 fn validate_name(name: &str) -> Result<()> {
 	if name.trim().is_empty() {
-		Err(CtxError::new("Name must not be empty"))
+		Err(NeuErr::new("Name must not be empty"))
 	} else if !name.chars().all(|c| c.is_alphabetic()) {
-		Err(CtxError::new("Name must only contain alphabetic characters"))
+		Err(NeuErr::new("Name must only contain alphabetic characters"))
 	} else {
 		Ok(())
 	}
@@ -35,7 +35,7 @@ struct User {
 }
 
 impl User {
-	fn new(data: UserData) -> Result<Self, Vec<CtxError>> {
+	fn new(data: UserData) -> Result<Self, Vec<NeuErr>> {
 		let mut errors = Vec::new();
 		let UserData { id, name, balance } = data;
 
@@ -43,11 +43,11 @@ impl User {
 		validate_name(&name).or_collect(&mut errors);
 
 		if balance < 0 {
-			errors.push(CtxError::new("Cannot create new user with debt"));
+			errors.push(NeuErr::new("Cannot create new user with debt"));
 		}
 
 		if id == 3 {
-			errors.push(CtxError::new(format!("User {id} ({name}) already exists")));
+			errors.push(NeuErr::new(format!("User {id} ({name}) already exists")));
 		}
 
 		let user = User { id, name, balance };

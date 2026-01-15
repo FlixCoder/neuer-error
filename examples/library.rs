@@ -8,7 +8,7 @@
 
 use ::neuer_error::Result;
 
-use self::library::CtxErrorAttachments;
+use self::library::NeuErrAttachments;
 
 /// Library creators need to think about what information would be interesting for humans and what
 /// machine information is necessary to handle errors programmatically.
@@ -16,7 +16,7 @@ use self::library::CtxErrorAttachments;
 /// When providing attachments, library authors should make use of the `provided_attachments!`
 /// macro!
 mod library {
-	use ::neuer_error::{CtxError, Result, provided_attachments, traits::*};
+	use ::neuer_error::{NeuErr, Result, provided_attachments, traits::*};
 
 	/// Kinds of errors that are interesting to match on for library users.
 	/// If it is only interesting to humans, it can be iin the context instead.
@@ -44,7 +44,7 @@ mod library {
 
 	/// Implement your errors while attaching machine-targeted information.
 	fn do_something_internal() -> Result<()> {
-		Err(CtxError::new("Error occurred internally")
+		Err(NeuErr::new("Error occurred internally")
 			.attach(ErrorKind::InvalidInput)
 			.attach(Retryable::No))
 	}

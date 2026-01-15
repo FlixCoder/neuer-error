@@ -7,6 +7,8 @@ use ::core::{
 	fmt::{Debug, Display, Formatter, Result as FmtResult},
 	panic::Location,
 };
+#[cfg(feature = "colors")]
+use ::yansi::Paint;
 
 use crate::features::{AnyDebugSendSync, ErrorSendSync};
 
@@ -57,33 +59,33 @@ const _: () = {
 /// multi-line formatting. You can use the alternate format (`{err:#}`) to get a compact single-line
 /// version. instead of multi-line formatted.
 #[derive(Default)]
-pub struct CtxError(CtxErrorImpl);
+pub struct NeuErr(NeuErrImpl);
 
-/// Inner implementation of [`CtxError`] that implements [`Error`].
+/// Inner implementation of [`NeuErr`] that implements [`Error`].
 #[derive(Default)]
-pub struct CtxErrorImpl {
+pub struct NeuErrImpl {
 	/// Contextual error information.
 	infos: Vec<Info>,
 	/// Source error.
 	source: Option<Box<dyn ErrorSendSync>>,
 }
 
-impl Debug for CtxError {
+impl Debug for NeuErr {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
 		Debug::fmt(&self.0, f)
 	}
 }
 
-impl Display for CtxError {
+impl Display for NeuErr {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
 		Display::fmt(&self.0, f)
 	}
 }
 
-impl Debug for CtxErrorImpl {
+impl Debug for NeuErrImpl {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
 		if f.alternate() {
-			f.debug_struct("CtxError")
+			f.debug_struct("NeuErr")
 				.field("infos", &self.infos)
 				.field("source", &self.source)
 				.finish()
@@ -93,21 +95,36 @@ impl Debug for CtxErrorImpl {
 	}
 }
 
-impl Display for CtxErrorImpl {
+impl Display for NeuErrImpl {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
 		let mut human = self.contexts().peekable();
 		if human.peek().is_none() {
-			write!(f, "Unknown error")?;
+			#[cfg(feature = "colors")]
+			let unknown = "Unknown error".red();
+			#[cfg(not(feature = "colors"))]
+			let unknown = "Unknown error";
+
+			write!(f, "{unknown}")?;
 		}
 		while let Some(context) = human.next() {
+			#[cfg(feature = "colors")]
+			let message = context.message.as_ref().red();
+			#[cfg(not(feature = "colors"))]
+			let message = context.message.as_ref();
+
+			#[cfg(feature = "colors")]
+			let location = context.location.rgb(0x90, 0x90, 0x90);
+			#[cfg(not(feature = "colors"))]
+			let location = context.location;
+
 			if f.alternate() {
-				write!(f, "{} (at {})", context.message, context.location)?;
+				write!(f, "{message} (at {location})")?;
 				if human.peek().is_some() {
 					write!(f, "; ")?;
 				}
 			} else {
-				writeln!(f, "{}", context.message)?;
-				write!(f, "|- at {}", context.location)?;
+				writeln!(f, "{message}")?;
+				write!(f, "|- at {location}")?;
 				if human.peek().is_some() {
 					writeln!(f)?;
 					writeln!(f, "|")?;
@@ -118,12 +135,17 @@ impl Display for CtxErrorImpl {
 		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
 		let mut source = self.source.as_deref().map(|e| e as &(dyn Error + 'static));
 		while let Some(err) = source {
+			#[cfg(feature = "colors")]
+			let error = err.red();
+			#[cfg(not(feature = "colors"))]
+			let error = err;
+
 			if f.alternate() {
-				write!(f, "; caused by: {err}")?;
+				write!(f, "; caused by: {error}")?;
 			} else {
 				writeln!(f)?;
 				writeln!(f, "|")?;
-				write!(f, "|- caused by: {err}")?;
+				write!(f, "|- caused by: {error}")?;
 			}
 
 			source = err.source();
@@ -133,7 +155,7 @@ impl Display for CtxErrorImpl {
 	}
 }
 
-impl CtxError {
+impl NeuErr {
 	/// Create new error.
 	#[track_caller]
 	#[must_use]
@@ -144,7 +166,7 @@ impl CtxError {
 	{
 		let infos =
 			vec![Info::Human(HumanInfo { message: context.into(), location: Location::caller() })];
-		Self(CtxErrorImpl { infos, ..Default::default() })
+		Self(NeuErrImpl { infos, ..Default::default() })
 	}
 
 	/// Create new error from source error.
@@ -158,7 +180,7 @@ impl CtxError {
 	{
 		let infos =
 			vec![Info::Human(HumanInfo { message: context.into(), location: Location::caller() })];
-		Self(CtxErrorImpl { infos, source: Some(Box::new(source)) })
+		Self(NeuErrImpl { infos, source: Some(Box::new(source)) })
 	}
 
 	/// Convert source error.
@@ -168,7 +190,7 @@ impl CtxError {
 	where
 		E: ErrorSendSync + 'static,
 	{
-		Self(CtxErrorImpl { source: Some(Box::new(source)), ..Default::default() })
+		Self(NeuErrImpl { source: Some(Box::new(source)), ..Default::default() })
 	}
 
 	/// Add human context to the error.
@@ -240,22 +262,22 @@ impl CtxError {
 		self.0.source.as_deref()
 	}
 
-	/// Unwrap this error into a [`CtxErrorImpl`] that implements [`Error`]. Note however, that it
+	/// Unwrap this error into a [`NeuErrImpl`] that implements [`Error`]. Note however, that it
 	/// does not offer all of the functionality and might be unwieldy for other general purposes
 	/// than interfacing with other error types.
 	#[must_use]
 	#[inline]
-	pub fn into_error(self) -> CtxErrorImpl {
+	pub fn into_error(self) -> NeuErrImpl {
 		self.0
 	}
 }
 
-impl CtxErrorImpl {
-	/// Wrap this error back into a [`CtxError`] that offers all of the functionality.
+impl NeuErrImpl {
+	/// Wrap this error back into a [`NeuErr`] that offers all of the functionality.
 	#[must_use]
 	#[inline]
-	pub const fn wrap(self) -> CtxError {
-		CtxError(self)
+	pub const fn wrap(self) -> NeuErr {
+		NeuErr(self)
 	}
 
 	/// Add human context to the error.
@@ -364,15 +386,15 @@ impl CtxErrorImpl {
 	}
 }
 
-impl From<CtxError> for CtxErrorImpl {
+impl From<NeuErr> for NeuErrImpl {
 	#[inline]
-	fn from(err: CtxError) -> Self {
+	fn from(err: NeuErr) -> Self {
 		err.0
 	}
 }
 
 #[diagnostic::do_not_recommend]
-impl<E> From<E> for CtxError
+impl<E> From<E> for NeuErr
 where
 	E: ErrorSendSync + 'static,
 {
@@ -382,7 +404,7 @@ where
 	}
 }
 
-impl Error for CtxErrorImpl {
+impl Error for NeuErrImpl {
 	#[inline]
 	fn source(&self) -> Option<&(dyn Error + 'static)> {
 		#[expect(trivial_casts, reason = "Not that trivial as it seems? False positive")]
@@ -390,7 +412,7 @@ impl Error for CtxErrorImpl {
 	}
 }
 
-impl AsRef<dyn Error> for CtxError {
+impl AsRef<dyn Error> for NeuErr {
 	#[inline]
 	fn as_ref(&self) -> &(dyn Error + 'static) {
 		&self.0
@@ -398,7 +420,7 @@ impl AsRef<dyn Error> for CtxError {
 }
 
 #[cfg(feature = "send")]
-impl AsRef<dyn Error + Send> for CtxError {
+impl AsRef<dyn Error + Send> for NeuErr {
 	#[inline]
 	fn as_ref(&self) -> &(dyn Error + Send + 'static) {
 		&self.0
@@ -406,39 +428,39 @@ impl AsRef<dyn Error + Send> for CtxError {
 }
 
 #[cfg(all(feature = "send", feature = "sync"))]
-impl AsRef<dyn Error + Send + Sync> for CtxError {
+impl AsRef<dyn Error + Send + Sync> for NeuErr {
 	#[inline]
 	fn as_ref(&self) -> &(dyn Error + Send + Sync + 'static) {
 		&self.0
 	}
 }
 
-impl From<CtxError> for Box<dyn Error> {
+impl From<NeuErr> for Box<dyn Error> {
 	#[inline]
-	fn from(this: CtxError) -> Self {
+	fn from(this: NeuErr) -> Self {
 		Box::new(this.into_error())
 	}
 }
 
 #[cfg(feature = "send")]
-impl From<CtxError> for Box<dyn Error + Send> {
+impl From<NeuErr> for Box<dyn Error + Send> {
 	#[inline]
-	fn from(this: CtxError) -> Self {
+	fn from(this: NeuErr) -> Self {
 		Box::new(this.into_error())
 	}
 }
 
 #[cfg(all(feature = "send", feature = "sync"))]
-impl From<CtxError> for Box<dyn Error + Send + Sync> {
+impl From<NeuErr> for Box<dyn Error + Send + Sync> {
 	#[inline]
-	fn from(this: CtxError) -> Self {
+	fn from(this: NeuErr) -> Self {
 		Box::new(this.into_error())
 	}
 }
 
 
 #[cfg(feature = "std")]
-impl std::process::Termination for CtxError {
+impl std::process::Termination for NeuErr {
 	#[inline]
 	fn report(self) -> std::process::ExitCode {
 		std::process::Termination::report(self.0)
@@ -446,7 +468,7 @@ impl std::process::Termination for CtxError {
 }
 
 #[cfg(feature = "std")]
-impl std::process::Termination for CtxErrorImpl {
+impl std::process::Termination for NeuErrImpl {
 	#[inline]
 	fn report(self) -> std::process::ExitCode {
 		self.attachment::<std::process::ExitCode>()

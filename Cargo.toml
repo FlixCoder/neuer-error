@@ -17,13 +17,16 @@ exclude = ["/.github"]
 default = ["std", "send", "sync"]
 # Use the standard library.
 # Provides interaction with `ExitCode` termination.
-std = []
+std = ["yansi?/std", "yansi?/detect-tty", "yansi?/detect-env"]
 # Error types must be `Send`.
 send = []
 # Error types must be `Sync`.
 sync = ["send"]
+# Enable colored error formatting. See `yansi` create documentation on how to control enable/disable colors.
+colors = ["dep:yansi"]
 
 [dependencies]
+yansi = { version = "1.0.1", optional = true, default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 regex = { version = "1.12.2", default-features = false, features = ["unicode", "perf"] }

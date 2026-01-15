@@ -19,6 +19,8 @@ An error handling library designed to be:
 - Works with std and no-std, but requires a global allocator. [See example](examples/embedded-no-std.rs).
 - Compatible with non-Send/Sync environments, but also with Send/Sync environments (per feature flag).
 - Out of the box source error chaining.
+- No dependencies by default. Optional features may lead to some dependencies.
+- No `unsafe` used (yet?).
 
 ## Why a new (German: neuer) error library?
 
@@ -44,7 +46,7 @@ provided_attachments!(
 );
 
 fn do_something_internal() -> Result<()> {
-  Err(CtxError::new("Error occurred internally")
+  Err(NeuErr::new("Error occurred internally")
     .attach(Retryable::No))
 }
 
@@ -67,6 +69,20 @@ fn main() {
 ```
 
 Run `cargo add neuer-error` to add the library to your project.
+
+## Comparisons
+
+### Anyhow / Eyre
+
+- `NeuErr` provides a meechanism to discover and retrieve multiple items of typed context information, while `anyhow` can `downcast` to its source error types only.
+- `NeuErr` captures source locations instead of backtraces by default, which is more efficient and works without debug info. I personally also find it easier to read.
+
+### Thiserror / Snafu
+
+- `NeuErr` is a single error type for all errors, so no need for boilerplate, better ergonomics, but less type safety and flexibility.
+- `NeuErr` captures source location automatically, which `thiserror` does not and `snafu` does only when you add the location field to every error variant.
+- `NeuErr` prints the full (source) error chain already.
+- `NeuErr` does not have procedural macros.
 
 ## Development
 

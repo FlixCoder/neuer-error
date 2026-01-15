@@ -1,7 +1,7 @@
 //! Macros for the users.
 
-/// Create a helper trait `CtxErrorAttachments` that is implemented for
-/// [`CtxError`](crate::CtxError), which allows to directly retrieve your attachments. You can
+/// Create a helper trait `NeuErrAttachments` that is implemented for
+/// [`NeuErr`](crate::NeuErr), which allows to directly retrieve your attachments. You can
 /// modify visibility and name by re-exporting via `pub use` if needed.
 ///
 /// This improves discoverability and allows you to unwrap potential new-types you might have had to
@@ -21,7 +21,7 @@
 /// );
 /// ```
 ///
-/// This will create a method `fn retryable(&self) -> Option<&Retryable>` on `CtxError`.
+/// This will create a method `fn retryable(&self) -> Option<&Retryable>` on `NeuErr`.
 ///
 /// You can also make use of the transformation expression that will be applied to the attachment
 /// before returning it:
@@ -36,7 +36,7 @@
 /// );
 /// ```
 ///
-/// This will create a method `fn retryable(&self) -> Retryable` on `CtxError`. The closure receives
+/// This will create a method `fn retryable(&self) -> Retryable` on `NeuErr`. The closure receives
 /// the `Option<&Retryable>` and returns a `Retryable`.
 ///
 /// Finally, you can also retrieve multiple attachments of the same type and transform the iterator
@@ -52,7 +52,7 @@
 /// );
 /// ```
 ///
-/// This will create a method `fn user_info(&self) -> String` on `CtxError`, which collects all
+/// This will create a method `fn user_info(&self) -> String` on `NeuErr`, which collects all
 /// `UserInfo` attachments, unpacks them and collects them into a single `String`.
 #[macro_export]
 macro_rules! provided_attachments {
@@ -100,8 +100,8 @@ macro_rules! provided_attachments {
 	($(
 		$getter_name:ident ($multiplicity_matcher:ident : $attachment_type:ty) -> $return_type:ty { |$bind:ident| $transform:expr }
 	);* $(;)?) => {
-		#[doc = "Helper trait that is implemented for [`CtxError`], which allows to comfortably retrieve typed context information."]
-		pub trait CtxErrorAttachments {
+		#[doc = "Helper trait that is implemented for [`NeuErr`], which allows to comfortably retrieve typed context information."]
+		pub trait NeuErrAttachments {
 			$(
 				$crate::provided_attachments!(@declare $getter_name($multiplicity_matcher: $attachment_type) -> $return_type {
 					|$bind| $transform
@@ -109,7 +109,7 @@ macro_rules! provided_attachments {
 			)*
 		}
 
-		impl CtxErrorAttachments for $crate::CtxError {
+		impl NeuErrAttachments for $crate::NeuErr {
 			$(
 				$crate::provided_attachments!(@implement $getter_name($multiplicity_matcher: $attachment_type) -> $return_type {
 					|$bind| $transform

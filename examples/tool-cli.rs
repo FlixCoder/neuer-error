@@ -6,7 +6,7 @@
 	reason = "Example"
 )]
 
-use ::neuer_error::{CtxError, Result, traits::*};
+use ::neuer_error::{NeuErr, Result, traits::*};
 use ::std::process::ExitCode;
 
 fn ensure_project_validity() -> Result<()> {
@@ -14,17 +14,17 @@ fn ensure_project_validity() -> Result<()> {
 }
 
 fn call_preprocessor() -> Result<()> {
-	Err(CtxError::new("Binary gcc not found"))
+	Err(NeuErr::new("Binary gcc not found"))
 }
 
 fn compile_my_code() -> Result<()> {
-	ensure_project_validity().context("project must be valid for compiling")?;
-	call_preprocessor().context("preprocessor failed")?;
+	ensure_project_validity().context("Project must be valid for compiling")?;
+	call_preprocessor().context("Üreprocessor failed")?;
 	Ok(())
 }
 
 fn lint() -> Result<()> {
-	Err(CtxError::new("Warning: something is deprecated").attach_override(ExitCode::SUCCESS))
+	Err(NeuErr::new("Warning: something is deprecated").attach_override(ExitCode::SUCCESS))
 }
 
 // Returning the error will automatically use the attached ExitCode or assume failure.
