@@ -70,6 +70,31 @@ fn main() {
 
 Run `cargo add neuer-error` to add the library to your project.
 
+## Error Formatting
+
+Error formatting is targeted towards developers. If you need to show errors to users, it is recommended to use special attachments for that ([see example](examples/non-dev-user.rs)).
+
+The error will be formatted in a "pretty" multi-line format (`{err}` or `{err:?}`):
+
+```
+Failed compiling code
+|- at examples/tool-cli.rs:33:23
+|
+Preprocessor failed
+|- at examples/tool-cli.rs:22:25
+|
+Binary gcc not found
+|- at examples/tool-cli.rs:17:9
+```
+
+Single-line formatting can be achieved via the alternate formatting mode (`{err:#}`):
+
+```
+Failed compiling code (at examples/tool-cli.rs:33:23); Preprocessor failed (at examples/tool-cli.rs:22:25); Binary gcc not found (at examples/tool-cli.rs:17:9)
+```
+
+The error can be formatted using Rust's default debug structure with alternate debug mode (`{err:#?}`).
+
 ## Comparisons
 
 ### Anyhow / Eyre
