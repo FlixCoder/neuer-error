@@ -4,22 +4,21 @@ use ::alloc::borrow::Cow;
 
 use crate::{
 	NeuErr,
+	error::ProvideContext,
 	features::{AnyDebugSendSync, ErrorSendSync},
 };
 
 /// Helper on our [`Result`](crate::Result)s for context addition and modification.
-pub trait CtxResultExt: Sized {
+pub trait NeuErrResultExt<T, M>: Sized {
 	/// Add human context to the error.
 	#[track_caller]
-	#[must_use]
-	fn context<C>(self, context: C) -> Self
+	fn context<C>(self, context: C) -> Result<T, NeuErr<ProvideContext>>
 	where
 		C: Into<Cow<'static, str>>;
 
 	/// Add human context to the error via a closure.
 	#[track_caller]
-	#[must_use]
-	fn context_with<F, C>(self, context_fn: F) -> Self
+	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr<ProvideContext>>
 	where
 		F: FnOnce() -> C,
 		C: Into<Cow<'static, str>>;
@@ -63,10 +62,9 @@ pub trait CtxResultExt: Sized {
 		C: AnyDebugSendSync + 'static;
 }
 
-impl<T> CtxResultExt for Result<T, NeuErr> {
+impl<T, M> NeuErrResultExt<T, M> for Result<T, NeuErr<M>> {
 	#[track_caller]
-	#[inline]
-	fn context<C>(self, context: C) -> Self
+	fn context<C>(self, context: C) -> Result<T, NeuErr<ProvideContext>>
 	where
 		C: Into<Cow<'static, str>>,
 	{
@@ -78,8 +76,7 @@ impl<T> CtxResultExt for Result<T, NeuErr> {
 	}
 
 	#[track_caller]
-	#[inline]
-	fn context_with<F, C>(self, context_fn: F) -> Self
+	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr<ProvideContext>>
 	where
 		F: FnOnce() -> C,
 		C: Into<Cow<'static, str>>,
@@ -91,7 +88,6 @@ impl<T> CtxResultExt for Result<T, NeuErr> {
 		}
 	}
 
-	#[inline]
 	fn attach<C>(self, context: C) -> Self
 	where
 		C: AnyDebugSendSync + 'static,
@@ -99,7 +95,6 @@ impl<T> CtxResultExt for Result<T, NeuErr> {
 		self.map_err(|err| err.attach(context))
 	}
 
-	#[inline]
 	fn attach_with<F, C>(self, context_fn: F) -> Self
 	where
 		F: FnOnce() -> C,
@@ -108,7 +103,6 @@ impl<T> CtxResultExt for Result<T, NeuErr> {
 		self.map_err(|err| err.attach(context_fn()))
 	}
 
-	#[inline]
 	fn attach_override<C>(self, context: C) -> Self
 	where
 		C: AnyDebugSendSync + 'static,
@@ -116,7 +110,6 @@ impl<T> CtxResultExt for Result<T, NeuErr> {
 		self.map_err(|err| err.attach_override(context))
 	}
 
-	#[inline]
 	fn attach_override_with<F, C>(self, context_fn: F) -> Self
 	where
 		F: FnOnce() -> C,
@@ -131,13 +124,13 @@ impl<T> CtxResultExt for Result<T, NeuErr> {
 pub trait ConvertResult<T, E>: Sized {
 	/// Add human context to the error.
 	#[track_caller]
-	fn context<C>(self, context: C) -> Result<T, NeuErr>
+	fn context<C>(self, context: C) -> Result<T, NeuErr<ProvideContext>>
 	where
 		C: Into<Cow<'static, str>>;
 
 	/// Add human context to the error via a closure.
 	#[track_caller]
-	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr>
+	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr<ProvideContext>>
 	where
 		F: FnOnce(&E) -> C,
 		C: Into<Cow<'static, str>>;
@@ -182,8 +175,7 @@ where
 	E: ErrorSendSync + 'static,
 {
 	#[track_caller]
-	#[inline]
-	fn context<C>(self, context: C) -> Result<T, NeuErr>
+	fn context<C>(self, context: C) -> Result<T, NeuErr<ProvideContext>>
 	where
 		C: Into<Cow<'static, str>>,
 	{
@@ -195,8 +187,7 @@ where
 	}
 
 	#[track_caller]
-	#[inline]
-	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr>
+	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr<ProvideContext>>
 	where
 		F: FnOnce(&E) -> C,
 		C: Into<Cow<'static, str>>,
@@ -211,7 +202,6 @@ where
 		}
 	}
 
-	#[inline]
 	fn attach<C>(self, context: C) -> Result<T, NeuErr>
 	where
 		C: AnyDebugSendSync + 'static,
@@ -219,7 +209,6 @@ where
 		self.map_err(|err| NeuErr::from_source(err).attach(context))
 	}
 
-	#[inline]
 	fn attach_with<F, C>(self, context_fn: F) -> Result<T, NeuErr>
 	where
 		F: FnOnce(&E) -> C,
@@ -231,7 +220,6 @@ where
 		})
 	}
 
-	#[inline]
 	fn attach_override<C>(self, context: C) -> Result<T, NeuErr>
 	where
 		C: AnyDebugSendSync + 'static,
@@ -239,7 +227,6 @@ where
 		self.map_err(|err| NeuErr::from_source(err).attach_override(context))
 	}
 
-	#[inline]
 	fn attach_override_with<F, C>(self, context_fn: F) -> Result<T, NeuErr>
 	where
 		F: FnOnce(&E) -> C,
@@ -257,13 +244,13 @@ where
 pub trait ConvertOption<T>: Sized {
 	/// Convert `None` to an error and add human context to the error.
 	#[track_caller]
-	fn context<C>(self, context: C) -> Result<T, NeuErr>
+	fn context<C>(self, context: C) -> Result<T, NeuErr<ProvideContext>>
 	where
 		C: Into<Cow<'static, str>>;
 
 	/// Convert `None` to an error and add human context to the error via a closure.
 	#[track_caller]
-	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr>
+	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr<ProvideContext>>
 	where
 		F: FnOnce() -> C,
 		C: Into<Cow<'static, str>>;
@@ -305,8 +292,7 @@ pub trait ConvertOption<T>: Sized {
 
 impl<T> ConvertOption<T> for Option<T> {
 	#[track_caller]
-	#[inline]
-	fn context<C>(self, context: C) -> Result<T, NeuErr>
+	fn context<C>(self, context: C) -> Result<T, NeuErr<ProvideContext>>
 	where
 		C: Into<Cow<'static, str>>,
 	{
@@ -318,8 +304,7 @@ impl<T> ConvertOption<T> for Option<T> {
 	}
 
 	#[track_caller]
-	#[inline]
-	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr>
+	fn context_with<F, C>(self, context_fn: F) -> Result<T, NeuErr<ProvideContext>>
 	where
 		F: FnOnce() -> C,
 		C: Into<Cow<'static, str>>,
@@ -334,7 +319,6 @@ impl<T> ConvertOption<T> for Option<T> {
 		}
 	}
 
-	#[inline]
 	fn attach<C>(self, context: C) -> Result<T, NeuErr>
 	where
 		C: AnyDebugSendSync + 'static,
@@ -342,7 +326,6 @@ impl<T> ConvertOption<T> for Option<T> {
 		self.ok_or_else(|| NeuErr::default().attach(context))
 	}
 
-	#[inline]
 	fn attach_with<F, C>(self, context_fn: F) -> Result<T, NeuErr>
 	where
 		F: FnOnce() -> C,
@@ -354,7 +337,6 @@ impl<T> ConvertOption<T> for Option<T> {
 		})
 	}
 
-	#[inline]
 	fn attach_override<C>(self, context: C) -> Result<T, NeuErr>
 	where
 		C: AnyDebugSendSync + 'static,
@@ -362,7 +344,6 @@ impl<T> ConvertOption<T> for Option<T> {
 		self.ok_or_else(|| NeuErr::default().attach_override(context))
 	}
 
-	#[inline]
 	fn attach_override_with<F, C>(self, context_fn: F) -> Result<T, NeuErr>
 	where
 		F: FnOnce() -> C,
@@ -385,7 +366,6 @@ pub trait ResultExt<T, E> {
 }
 
 impl<T, E> ResultExt<T, E> for Result<T, E> {
-	#[inline]
 	fn or_collect<C>(self, collection: &mut C) -> Option<T>
 	where
 		C: Extend<E>,

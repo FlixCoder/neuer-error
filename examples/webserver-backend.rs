@@ -20,9 +20,9 @@ impl IntoResponse for ToResponse {
 	}
 }
 
-impl From<NeuErr> for ToResponse {
-	fn from(err: NeuErr) -> Self {
-		Self(err)
+impl<M> From<NeuErr<M>> for ToResponse {
+	fn from(err: NeuErr<M>) -> Self {
+		Self(err.remove_marker())
 	}
 }
 

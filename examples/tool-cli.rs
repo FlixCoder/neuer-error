@@ -14,7 +14,7 @@ fn ensure_project_validity() -> Result<()> {
 }
 
 fn call_preprocessor() -> Result<()> {
-	Err(NeuErr::new("Binary gcc not found"))
+	Err(NeuErr::new("Binary gcc not found").into())
 }
 
 fn compile_my_code() -> Result<()> {
@@ -24,7 +24,7 @@ fn compile_my_code() -> Result<()> {
 }
 
 fn lint() -> Result<()> {
-	Err(NeuErr::new("Warning: something is deprecated").attach_override(ExitCode::SUCCESS))
+	Err(NeuErr::new("Warning: something is deprecated").attach_override(ExitCode::SUCCESS).into())
 }
 
 // Returning the error will automatically use the attached ExitCode or assume failure.

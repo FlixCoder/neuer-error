@@ -118,3 +118,113 @@ macro_rules! provided_attachments {
 		}
 	};
 }
+
+/// Apply this to a function, to automatically make inner errors require context.
+/// Ensures there will be a compile-time error when you forget to provide context to an error within
+/// the current function.
+///
+/// It is highly recommended to make use of the crate `macro_rules_attribute` to use it as an
+/// attribute instead of surrounding the function with the macro:
+///
+/// ```
+/// # use ::macro_rules_attribute::apply;
+/// # use ::neuer_error::{Result, require_context};
+/// #[apply(require_context)]
+/// fn do_something() -> Result<()> {
+/// 	Ok(())
+/// }
+/// ```
+///
+/// Otherwise, you can use it like this:
+///
+/// ```
+/// # use ::neuer_error::{Result, require_context};
+/// require_context!(
+/// 	fn do_something() -> Result<()> {
+/// 		Ok(())
+/// 	}
+/// );
+/// ```
+///
+/// Only the following kinds of functions are supported currently:
+///
+/// - Function must not be const, unsafe or have an external ABI.
+/// - Function cannot have generics.
+///
+/// It is also possible to use the macro within functions, specifying sync vs async with a marker
+/// up-front:
+///
+/// ```
+/// # use ::neuer_error::{Result, require_context};
+/// fn do_something() -> Result<()> {
+/// 	require_context!(@sync
+/// 		let result = Ok(());
+/// 		result
+/// 	)
+/// }
+/// ```
+#[macro_export]
+macro_rules! require_context {
+	// Macro entry for within async function body blocks.
+	(@async $($body:tt)* ) => {{
+		let call = async move || -> ::core::result::Result<_, $crate::NeuErr<$crate::ProvideContext>> { $($body)* };
+		call().await.map_err($crate::NeuErr::<$crate::ProvideContext>::remove_marker)
+	}};
+
+	// Macro entry for within sync function body blocks.
+	(@sync $($body:tt)* ) => {{
+		let call = move || -> ::core::result::Result<_, $crate::NeuErr<$crate::ProvideContext>> { $($body)* };
+		call().map_err($crate::NeuErr::<$crate::ProvideContext>::remove_marker)
+	}};
+
+	// Async functions.
+	(
+		$(#[$attrs:meta])*
+		$vis:vis async fn $name:ident
+		( $($params:tt)* ) -> $return:ty
+		$body:block
+	) => {
+		$(#[$attrs])*
+		$vis async fn $name
+		( $($params)* ) -> $return
+		{
+			$crate::require_context!(@async $body)
+		}
+	};
+
+	// Sync functions.
+	(
+		$(#[$attrs:meta])*
+		$vis:vis fn $name:ident
+		( $($params:tt)* ) -> $return:ty
+		$body:block
+	) => {
+		$(#[$attrs])*
+		$vis fn $name
+		( $($params)* ) -> $return
+		{
+			$crate::require_context!(@sync $body)
+		}
+	};
+}
+
+#[cfg(test)]
+mod compile_tests {
+	#![allow(dead_code, reason = "Compile tests")]
+
+	use ::macro_rules_attribute::apply;
+
+	use crate::Result;
+
+	require_context!(
+		#[cfg(test)]
+		pub async fn test1(#[cfg(test)] _param: bool, (): ()) -> Result<()> {
+			Ok(())
+		}
+	);
+
+	#[apply(require_context)]
+	fn test2() -> Result<()> {
+		Ok(())
+	}
+}

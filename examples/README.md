@@ -4,6 +4,10 @@
 
 This shows how it could be used with a no-std allocator. Given an allocator, actually nothing is different from std usage.
 
+## [enforce-context](enforce-context.rs)
+
+A presentation of how to force yourself to add `.context` to your results/errors before returning, so that there will be enough information in error messages.
+
 ## [library](library.rs)
 
 This demonstrates how libraries could use the error type, while still providing discoverable recovery information and good error messages and interfacing.

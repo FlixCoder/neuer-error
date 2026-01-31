@@ -18,7 +18,7 @@ use ::neuer_error::{NeuErr, Result, traits::*};
 
 
 fn self_test() -> Result<()> {
-	Err(NeuErr::new("Memory error"))
+	Err(NeuErr::new("Memory error").into())
 }
 
 fn boot_up() -> Result<()> {

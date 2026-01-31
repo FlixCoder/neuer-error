@@ -5,6 +5,7 @@ use ::core::{
 	any::Any,
 	error::Error,
 	fmt::{Debug, Display, Formatter, Result as FmtResult},
+	marker::PhantomData,
 	panic::Location,
 };
 #[cfg(feature = "colors")]
@@ -44,6 +45,11 @@ const _: () = {
 	assert!(size_of::<Info>() == size_of::<HumanInfo>());
 };
 
+/// Internal marker type to enforce providing context.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ProvideContext;
+
 /// Generic rich error type for use within `Result`s, for libraries and applications.
 ///
 /// Add human context information, including code locations, via the `context` method.
@@ -59,7 +65,7 @@ const _: () = {
 /// multi-line formatting. You can use the alternate format (`{err:#}`) to get a compact single-line
 /// version. instead of multi-line formatted.
 #[derive(Default)]
-pub struct NeuErr(NeuErrImpl);
+pub struct NeuErr<M = ()>(NeuErrImpl, PhantomData<M>);
 
 /// Inner implementation of [`NeuErr`] that implements [`Error`].
 #[derive(Default)]
@@ -70,13 +76,13 @@ pub struct NeuErrImpl {
 	source: Option<Box<dyn ErrorSendSync>>,
 }
 
-impl Debug for NeuErr {
+impl<M> Debug for NeuErr<M> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
 		Debug::fmt(&self.0, f)
 	}
 }
 
-impl Display for NeuErr {
+impl<M> Display for NeuErr<M> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
 		Display::fmt(&self.0, f)
 	}
@@ -155,24 +161,22 @@ impl Display for NeuErrImpl {
 	}
 }
 
-impl NeuErr {
+impl NeuErr<ProvideContext> {
 	/// Create new error.
 	#[track_caller]
 	#[must_use]
-	#[inline]
 	pub fn new<C>(context: C) -> Self
 	where
 		C: Into<Cow<'static, str>>,
 	{
 		let infos =
 			vec![Info::Human(HumanInfo { message: context.into(), location: Location::caller() })];
-		Self(NeuErrImpl { infos, ..Default::default() })
+		Self(NeuErrImpl { infos, ..Default::default() }, PhantomData)
 	}
 
 	/// Create new error from source error.
 	#[track_caller]
 	#[must_use]
-	#[inline]
 	pub fn new_with_source<C, E>(context: C, source: E) -> Self
 	where
 		C: Into<Cow<'static, str>>,
@@ -180,28 +184,30 @@ impl NeuErr {
 	{
 		let infos =
 			vec![Info::Human(HumanInfo { message: context.into(), location: Location::caller() })];
-		Self(NeuErrImpl { infos, source: Some(Box::new(source)) })
+		Self(NeuErrImpl { infos, source: Some(Box::new(source)) }, PhantomData)
 	}
+}
 
+impl NeuErr {
 	/// Convert source error.
 	#[must_use]
-	#[inline]
 	pub fn from_source<E>(source: E) -> Self
 	where
 		E: ErrorSendSync + 'static,
 	{
-		Self(NeuErrImpl { source: Some(Box::new(source)), ..Default::default() })
+		Self(NeuErrImpl { source: Some(Box::new(source)), ..Default::default() }, PhantomData)
 	}
+}
 
+impl<M> NeuErr<M> {
 	/// Add human context to the error.
 	#[track_caller]
 	#[must_use]
-	#[inline]
-	pub fn context<C>(self, context: C) -> Self
+	pub fn context<C>(self, context: C) -> NeuErr<ProvideContext>
 	where
 		C: Into<Cow<'static, str>>,
 	{
-		Self(self.0.context(context))
+		NeuErr(self.0.context(context), PhantomData)
 	}
 
 	/// Add machine context to the error.
@@ -209,12 +215,11 @@ impl NeuErr {
 	/// This will not override existing attachments. If you want to replace and override any
 	/// existing attachments of the same type, use `attach_override` instead.
 	#[must_use]
-	#[inline]
 	pub fn attach<C>(self, context: C) -> Self
 	where
 		C: AnyDebugSendSync + 'static,
 	{
-		Self(self.0.attach(context))
+		Self(self.0.attach(context), PhantomData)
 	}
 
 	/// Set machine context in the error.
@@ -226,18 +231,16 @@ impl NeuErr {
 	where
 		C: AnyDebugSendSync + 'static,
 	{
-		Self(self.0.attach_override(context))
+		Self(self.0.attach_override(context), PhantomData)
 	}
 
 	/// Get an iterator over the human context infos.
-	#[inline]
 	#[cfg_attr(not(test), expect(unused, reason = "For consistency"))]
 	pub(crate) fn contexts(&self) -> impl Iterator<Item = &'_ HumanInfo> {
 		self.0.contexts()
 	}
 
 	/// Get an iterator over the machine context attachments of the given type.
-	#[inline]
 	pub fn attachments<C>(&self) -> impl Iterator<Item = &'_ C>
 	where
 		C: AnyDebugSendSync + 'static,
@@ -247,7 +250,6 @@ impl NeuErr {
 
 	/// Get the machine context attachment of the given type.
 	#[must_use]
-	#[inline]
 	pub fn attachment<C>(&self) -> Option<&C>
 	where
 		C: AnyDebugSendSync + 'static,
@@ -257,7 +259,6 @@ impl NeuErr {
 
 	/// Get the source error.
 	#[must_use]
-	#[inline]
 	pub fn source(&self) -> Option<&(dyn ErrorSendSync + 'static)> {
 		self.0.source.as_deref()
 	}
@@ -270,6 +271,13 @@ impl NeuErr {
 	pub fn into_error(self) -> NeuErrImpl {
 		self.0
 	}
+
+	/// Clean up the context provided marker.
+	#[must_use]
+	#[inline]
+	pub fn remove_marker(self) -> NeuErr {
+		NeuErr(self.0, PhantomData)
+	}
 }
 
 impl NeuErrImpl {
@@ -277,13 +285,12 @@ impl NeuErrImpl {
 	#[must_use]
 	#[inline]
 	pub const fn wrap(self) -> NeuErr {
-		NeuErr(self)
+		NeuErr(self, PhantomData)
 	}
 
 	/// Add human context to the error.
 	#[track_caller]
 	#[must_use]
-	#[inline]
 	pub fn context<C>(mut self, context: C) -> Self
 	where
 		C: Into<Cow<'static, str>>,
@@ -298,7 +305,6 @@ impl NeuErrImpl {
 	/// This will not override existing attachments. If you want to replace and override any
 	/// existing attachments of the same type, use `attach_override` instead.
 	#[must_use]
-	#[inline]
 	pub fn attach<C>(mut self, context: C) -> Self
 	where
 		C: AnyDebugSendSync + 'static,
@@ -345,13 +351,11 @@ impl NeuErrImpl {
 	}
 
 	/// Get an iterator over all context infos.
-	#[inline]
 	pub(crate) fn infos(&self) -> impl Iterator<Item = &'_ Info> {
 		self.infos.iter().rev()
 	}
 
 	/// Get an iterator over the human context infos.
-	#[inline]
 	pub(crate) fn contexts(&self) -> impl Iterator<Item = &'_ HumanInfo> {
 		self.infos().filter_map(|info| match info {
 			Info::Human(info) => Some(info),
@@ -360,7 +364,6 @@ impl NeuErrImpl {
 	}
 
 	/// Get an iterator over the machine context attachments of the given type.
-	#[inline]
 	pub fn attachments<C>(&self) -> impl Iterator<Item = &'_ C>
 	where
 		C: AnyDebugSendSync + 'static,
@@ -377,7 +380,6 @@ impl NeuErrImpl {
 
 	/// Get the machine context attachment of the given type.
 	#[must_use]
-	#[inline]
 	pub fn attachment<C>(&self) -> Option<&C>
 	where
 		C: AnyDebugSendSync + 'static,
@@ -386,10 +388,17 @@ impl NeuErrImpl {
 	}
 }
 
-impl From<NeuErr> for NeuErrImpl {
+impl<M> From<NeuErr<M>> for NeuErrImpl {
 	#[inline]
-	fn from(err: NeuErr) -> Self {
+	fn from(err: NeuErr<M>) -> Self {
 		err.0
+	}
+}
+
+impl From<NeuErr<ProvideContext>> for NeuErr {
+	#[inline]
+	fn from(err: NeuErr<ProvideContext>) -> Self {
+		NeuErr(err.0, PhantomData)
 	}
 }
 
@@ -398,7 +407,6 @@ impl<E> From<E> for NeuErr
 where
 	E: ErrorSendSync + 'static,
 {
-	#[inline]
 	fn from(err: E) -> Self {
 		Self::from_source(err)
 	}
@@ -412,7 +420,7 @@ impl Error for NeuErrImpl {
 	}
 }
 
-impl AsRef<dyn Error> for NeuErr {
+impl<M> AsRef<dyn Error> for NeuErr<M> {
 	#[inline]
 	fn as_ref(&self) -> &(dyn Error + 'static) {
 		&self.0
@@ -420,7 +428,7 @@ impl AsRef<dyn Error> for NeuErr {
 }
 
 #[cfg(feature = "send")]
-impl AsRef<dyn Error + Send> for NeuErr {
+impl<M> AsRef<dyn Error + Send> for NeuErr<M> {
 	#[inline]
 	fn as_ref(&self) -> &(dyn Error + Send + 'static) {
 		&self.0
@@ -428,40 +436,39 @@ impl AsRef<dyn Error + Send> for NeuErr {
 }
 
 #[cfg(all(feature = "send", feature = "sync"))]
-impl AsRef<dyn Error + Send + Sync> for NeuErr {
+impl<M> AsRef<dyn Error + Send + Sync> for NeuErr<M> {
 	#[inline]
 	fn as_ref(&self) -> &(dyn Error + Send + Sync + 'static) {
 		&self.0
 	}
 }
 
-impl From<NeuErr> for Box<dyn Error> {
+impl<M> From<NeuErr<M>> for Box<dyn Error> {
 	#[inline]
-	fn from(this: NeuErr) -> Self {
+	fn from(this: NeuErr<M>) -> Self {
 		Box::new(this.into_error())
 	}
 }
 
 #[cfg(feature = "send")]
-impl From<NeuErr> for Box<dyn Error + Send> {
+impl<M> From<NeuErr<M>> for Box<dyn Error + Send> {
 	#[inline]
-	fn from(this: NeuErr) -> Self {
+	fn from(this: NeuErr<M>) -> Self {
 		Box::new(this.into_error())
 	}
 }
 
 #[cfg(all(feature = "send", feature = "sync"))]
-impl From<NeuErr> for Box<dyn Error + Send + Sync> {
+impl<M> From<NeuErr<M>> for Box<dyn Error + Send + Sync> {
 	#[inline]
-	fn from(this: NeuErr) -> Self {
+	fn from(this: NeuErr<M>) -> Self {
 		Box::new(this.into_error())
 	}
 }
 
 
 #[cfg(feature = "std")]
-impl std::process::Termination for NeuErr {
-	#[inline]
+impl<M> std::process::Termination for NeuErr<M> {
 	fn report(self) -> std::process::ExitCode {
 		std::process::Termination::report(self.0)
 	}
@@ -469,7 +476,6 @@ impl std::process::Termination for NeuErr {
 
 #[cfg(feature = "std")]
 impl std::process::Termination for NeuErrImpl {
-	#[inline]
 	fn report(self) -> std::process::ExitCode {
 		self.attachment::<std::process::ExitCode>()
 			.copied()

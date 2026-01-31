@@ -130,14 +130,14 @@ fn context_correct_locations() {
 	error.contexts().map(|ctx| ctx.location).for_each(ensure_location);
 
 	let src = "".parse::<bool>().unwrap_err();
-	let result: Result<()> =
+	let result: Result<(), _> =
 		Err(NeuErr::new_with_source("test", src)).context("test").context_with(|| "test");
 	result.unwrap_err().contexts().map(|ctx| ctx.location).for_each(ensure_location);
 
-	let result: Result<bool> = source().context("test");
+	let result: Result<bool, _> = source().context("test");
 	result.unwrap_err().contexts().map(|ctx| ctx.location).for_each(ensure_location);
 
-	let result: Result<bool> = source().context_with(|_| "test");
+	let result: Result<bool, _> = source().context_with(|_| "test");
 	result.unwrap_err().contexts().map(|ctx| ctx.location).for_each(ensure_location);
 
 	#[expect(clippy::items_after_statements, reason = "We need the line number of the end")]
@@ -263,13 +263,16 @@ fn source_source() -> Result<(), SourceError> {
 }
 
 fn level0() -> Result<()> {
-	source_source().context("Level 0 error")
+	source_source().context("Level 0 error")?;
+	Ok(())
 }
 
 fn level1() -> Result<()> {
-	level0().context("Level 1 error")
+	level0().context("Level 1 error")?;
+	Ok(())
 }
 
 fn level2() -> Result<()> {
-	level1().context("Level 2 error")
+	level1().context("Level 2 error")?;
+	Ok(())
 }
