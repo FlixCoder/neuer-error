@@ -46,12 +46,14 @@ mod library {
 	fn do_something_internal() -> Result<()> {
 		Err(NeuErr::new("Error occurred internally")
 			.attach(ErrorKind::InvalidInput)
-			.attach(Retryable::No))
+			.attach(Retryable::No)
+			.remove_marker())
 	}
 
 	/// Alose provide human-targeted context when propagating errors.
 	pub fn do_something() -> Result<()> {
-		do_something_internal().context("Operation failed")
+		do_something_internal().context("Operation failed")?;
+		Ok(())
 	}
 }
 

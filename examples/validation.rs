@@ -15,14 +15,14 @@ struct UserData {
 }
 
 fn validate_id(id: u64) -> Result<()> {
-	if id == 0 { Err(NeuErr::new("ID must be non-zero")) } else { Ok(()) }
+	if id == 0 { Err(NeuErr::new("ID must be non-zero").into()) } else { Ok(()) }
 }
 
 fn validate_name(name: &str) -> Result<()> {
 	if name.trim().is_empty() {
-		Err(NeuErr::new("Name must not be empty"))
+		Err(NeuErr::new("Name must not be empty").into())
 	} else if !name.chars().all(|c| c.is_alphabetic()) {
-		Err(NeuErr::new("Name must only contain alphabetic characters"))
+		Err(NeuErr::new("Name must only contain alphabetic characters").into())
 	} else {
 		Ok(())
 	}
@@ -43,11 +43,11 @@ impl User {
 		validate_name(&name).or_collect(&mut errors);
 
 		if balance < 0 {
-			errors.push(NeuErr::new("Cannot create new user with debt"));
+			errors.push(NeuErr::new("Cannot create new user with debt").into());
 		}
 
 		if id == 3 {
-			errors.push(NeuErr::new(format!("User {id} ({name}) already exists")));
+			errors.push(NeuErr::new(format!("User {id} ({name}) already exists")).into());
 		}
 
 		let user = User { id, name, balance };

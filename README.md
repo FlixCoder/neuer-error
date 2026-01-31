@@ -12,12 +12,13 @@ An error handling library designed to be:
 - Ergonomic, low-boilerplate and comfortable, while still adhering best-practices and providing all necessary infos.
 - Flexible in interfacing with other error handling libraries.
 
-## Features
+## Features/Highlights
 
 - Most importantly: error messages, that are helpful for debugging. By default it uses source locations instead of backtraces, which is often easier to follow, more efficient and works without debug info.
 - Discoverable, typed context getters without generic soup, type conversions and conflicts.
-- Works with std and no-std, but requires a global allocator. [See example](examples/embedded-no-std.rs).
+- Optional macro rule to force yourself at compile-time to add additional context in functions. [See example](examples/enforce-context.rs).
 - Compatible with non-Send/Sync environments, but also with Send/Sync environments (per feature flag).
+- Works with std and no-std, but requires a global allocator. [See example](examples/embedded-no-std.rs).
 - Out of the box source error chaining.
 - No dependencies by default. Optional features may lead to some dependencies.
 - No `unsafe` used (yet?).
@@ -47,11 +48,15 @@ provided_attachments!(
 
 fn do_something_internal() -> Result<()> {
   Err(NeuErr::new("Error occurred internally")
-    .attach(Retryable::No))
+    .attach(Retryable::No)
+   	.into())
 }
 
+#[macro_rules_attribute::apply(require_context)]
 pub fn do_something() -> Result<()> {
-  do_something_internal().context("Operation failed")
+	// There would be a compile-time error if no context was given.
+  do_something_internal().context("Operation failed")?;
+  Ok(())
 }
 
 // In consumer/application:
@@ -100,6 +105,7 @@ The error can be formatted using Rust's default debug structure with alternate d
 ### Anyhow / Eyre
 
 - `NeuErr` provides a meechanism to discover and retrieve multiple items of typed context information, while `anyhow` can `downcast` to its source error types only.
+- `NeuErr` provides a helper to ensure you don't forget to add context to your errors.
 - `NeuErr` captures source locations instead of backtraces by default, which is more efficient and works without debug info. I personally also find it easier to read.
 
 ### Thiserror / Snafu

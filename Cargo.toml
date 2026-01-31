@@ -29,6 +29,7 @@ colors = ["dep:yansi"]
 yansi = { version = "1.0.1", optional = true, default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
+macro_rules_attribute = "0.2.2"
 regex = { version = "1.12.2", default-features = false, features = ["unicode", "perf"] }
 
 

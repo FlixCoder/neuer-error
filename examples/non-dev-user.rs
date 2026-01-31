@@ -23,7 +23,7 @@ provided_attachments!(
 struct MyUser;
 
 fn fetch_user() -> Result<MyUser> {
-	Err(NeuErr::new("Failed!").attach(UserErrorMessage("Invalid user ID 5".to_owned())))
+	Err(NeuErr::new("Failed!").attach(UserErrorMessage("Invalid user ID 5".to_owned())).into())
 }
 
 fn save_user(_user: MyUser) -> Result<()> {

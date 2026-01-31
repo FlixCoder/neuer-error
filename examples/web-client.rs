@@ -51,7 +51,9 @@ fn fetch_data(user: &str) -> Result<()> {
 		};
 		NeuErr::new_with_source(format!("Failed fetching data for user {user}"), err)
 			.attach_override(status)
-	})
+	})?;
+
+	Ok(())
 }
 
 fn main() {

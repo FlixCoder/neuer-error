@@ -14,9 +14,10 @@
 //!   locations instead of backtraces, which is often easier to follow, more efficient and works
 //!   without debug info.
 //! - Discoverable, typed context getters without generic soup, type conversions and conflicts.
-//! - Works with std and no-std, but requires a global allocator.
+//! - Optional macro rule to force yourself at compile-time to add additional context in functions.
 //! - Compatible with non-Send/Sync environments, but also with Send/Sync environments ([per feature
 //!   flag](#feature-flags)).
+//! - Works with std and no-std, but requires a global allocator.
 //! - Out of the box source error chaining.
 //! - No dependencies by default. Optional features may lead to some dependencies.
 //! - No `unsafe` used (yet?).
@@ -34,38 +35,42 @@
 //! Nevertheless, here is a quick demo:
 //!
 //! ```rust
-//! # use neuer_error::{traits::*, NeuErr, Result, provided_attachments};
+//! # use neuer_error::{traits::*, NeuErr, Result, provided_attachments, require_context};
 //! // In library/module:
 //! #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 //! pub enum Retryable { No, Yes }
 //!
 //! // Provide discoverable, typed information for library users.
 //! provided_attachments!(
-//!   retryable(single: Retryable) -> bool {
-//!     |retryable| matches!(retryable, Some(Retryable::Yes))
-//!   };
+//! 	retryable(single: Retryable) -> bool {
+//! 		|retryable| matches!(retryable, Some(Retryable::Yes))
+//! 	};
 //! );
 //!
 //! fn do_something_internal() -> Result<()> {
-//!   Err(NeuErr::new("Error occurred internally")
-//!     .attach(Retryable::No))
+//! 	Err(NeuErr::new("Error occurred internally")
+//!     	.attach(Retryable::No)
+//! 		.into())
 //! }
 //!
+//! #[macro_rules_attribute::apply(require_context)]
 //! pub fn do_something() -> Result<()> {
-//!   do_something_internal().context("Operation failed")
+//! 	// There would be a compile-time error if no context was given.
+//! 	do_something_internal().context("Operation failed")?;
+//! 	Ok(())
 //! }
 //!
 //! // In consumer/application:
 //! fn main() {
-//!   match do_something() {
-//!     Ok(()) => {}
-//!     Err(err) if err.retryable() => {
-//!       eprintln!("Retryable error");
-//!     }
-//!     Err(_) => {
-//!       eprintln!("Non-retryable error");
-//!     }
-//!   }
+//! 	match do_something() {
+//! 		Ok(()) => {}
+//! 		Err(err) if err.retryable() => {
+//! 			eprintln!("Retryable error");
+//! 		}
+//! 		Err(_) => {
+//! 			eprintln!("Non-retryable error");
+//! 		}
+//! 	}
 //! }
 //! ```
 //!
@@ -104,6 +109,7 @@
 //!
 //! - `NeuErr` provides a meechanism to discover and retrieve multiple items of typed context
 //!   information, while `anyhow` can `downcast` to its source error types only.
+//! - `NeuErr` provides a helper to ensure you don't forget to add context to your errors.
 //! - `NeuErr` captures source locations instead of backtraces by default, which is more efficient
 //!   and works without debug info. I personally also find it easier to read.
 //!
@@ -143,13 +149,13 @@ mod macros;
 mod results;
 
 pub use self::{
-	error::{NeuErr, NeuErrImpl},
-	results::{ConvertOption, ConvertResult, CtxResultExt, ResultExt},
+	error::{NeuErr, NeuErrImpl, ProvideContext},
+	results::{ConvertOption, ConvertResult, NeuErrResultExt, ResultExt},
 };
 
 pub mod traits {
 	//! All traits that need to be in scope for	comfortable usage.
-	pub use crate::{ConvertOption as _, ConvertResult as _, CtxResultExt as _, ResultExt as _};
+	pub use crate::{ConvertOption as _, ConvertResult as _, NeuErrResultExt as _, ResultExt as _};
 }
 
 /// `Result` type alias using the crate's [`NeuErr`] type.
